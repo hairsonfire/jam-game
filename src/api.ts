@@ -94,12 +94,13 @@ export async function command(
     .catch(() => {});
   return data;
 }
+export class SessionUnavailable extends Error {}
 export async function readState(roomId: string): Promise<State> {
   await identity();
   const { data, error } = await supabase!
     .rpc("game_state", { room_id: roomId })
     .abortSignal(AbortSignal.timeout(15000));
-  if (error) throw new Error(error.message);
+  if (error) throw error.code === "JAM01" ? new SessionUnavailable(error.message) : new Error(error.message);
   return data;
 }
 export async function recoveryHash(secret: string) {

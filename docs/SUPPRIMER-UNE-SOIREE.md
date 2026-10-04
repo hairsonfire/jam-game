@@ -35,4 +35,4 @@ La suppression ne ferme pas instantanément les écrans déjà ouverts : les par
 - **Nom incorrect :** recopiez exactement le nom affiché par l’aperçu.
 - **Délai d’attente ou autre erreur :** l’opération est annulée en entier, sans suppression partielle. Si l’éditeur indique qu’une transaction est interrompue, exécutez `ROLLBACK;` seul, puis relancez le script complet. Évitez de supprimer une soirée pendant que les participants jouent.
 
-Ce script ne fait aucun nettoyage automatique et n’ajoute aucune commande de suppression accessible aux joueurs.
+Ce script reste une solution manuelle pour le propriétaire du serveur. L’administrateur peut aussi supprimer sa soirée depuis **Réglages → Clore et effacer la soirée** dans Jam. Avec la migration 005 et le job `jam-room-cleanup` installés, un nettoyage quotidien supprime les soirées après six mois sans ouverture ni action ; il reprend après réactivation si le serveur est en pause.

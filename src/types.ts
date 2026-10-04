@@ -64,6 +64,7 @@ export type State = {
   }[];
 };
 export type CommandResult = {
+  deleted?: boolean;
   roomId?: string;
   playerId?: string;
   code?: string;

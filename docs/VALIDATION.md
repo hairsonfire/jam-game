@@ -63,4 +63,11 @@ Les systèmes peuvent retarder ou masquer une notification. Cela ne doit jamais 
 
 ## Critère final d’acceptation
 
+### Gestion des participants — 4 octobre 2026
+
+- 27 tests SQL : droits administrateur, confirmation obligatoire, suppression du témoin et du responsable musical, refus des anciens accès, préservation des échecs, reprise du même clic, suppression des données liées et isolation des autres soirées. Nettoyage testé avec dates simulées avant/après six mois et maintien de l’activité sur accès autorisé.
+- 3 tests navigateur sur base locale : le parcours à trois participants inclut l’annulation puis la confirmation de suppression d’un joueur, le code de confirmation de suppression de soirée, une réponse perdue et le retour à l’accueil des participants. Ces tests ne remplacent pas un essai sur des téléphones réels.
+- Migration 005 appliquée sur Supabase. Job `jam-room-cleanup` vérifié actif, quotidien à 04:15 UTC. Le premier nettoyage planifié n’a pas encore été observé ; aucune donnée réelle n’a été supprimée pour le tester.
+- Nouvelle interface préparée dans `dist` ; publication Vercel manuelle encore nécessaire pour rendre ces boutons disponibles sur le site.
+
 Trois vrais téléphones terminent le parcours complet, sans perte de progression après coupure, sans incohérence de jetons ni demande disparue. La liste persistante fonctionne même si les notifications sont indisponibles. Les limites observées des notifications sont consignées, et l’administrateur sait réactiver Supabase avant la soirée si nécessaire.

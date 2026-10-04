@@ -15,6 +15,7 @@ import {
   newRecovery,
   pendingCommand,
   readState,
+  SessionUnavailable,
   recoveryHash,
   storage,
   supabase,
@@ -878,10 +879,35 @@ function Admin({ s, act }: { s: State; act: Act }) {
   const [bonus, setBonus] = useState(s.room.bonus);
   const [sacrifice, setSacrifice] = useState(s.room.sacrifice);
   const [musicId, setMusicId] = useState(s.room.music_id);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState("");
   return (
     <>
       <p className="eyebrow">À VOTRE FAÇON</p>
       <h1>Les règles de la maison.</h1>
+      <section className="panel">
+        <h2>Les participants</h2>
+        <p className="muted">Supprimer un joueur efface son profil, ses jetons et ses demandes dans cette soirée. Il pourra revenir avec un nouveau profil.</p>
+        {s.players.map((player) => (
+          <div className="challenge-editor" key={player.id}>
+            <p><strong>{player.name}</strong>{player.id === s.room.admin_id ? " · Administrateur" : ""}{player.id === s.room.music_id ? " · Responsable musical" : ""}</p>
+            {player.id !== s.me.id && (removing === player.id ? (
+              <div role="group" aria-label={`Confirmer la suppression de ${player.name}`}>
+                <p>Supprimer définitivement le profil de {player.name} ? Ses demandes seront annulées. Les chansons déjà ajoutées à votre application musicale y resteront.</p>
+                <p>Ses épreuves comme témoin seront interrompues pour permettre de choisir quelqu’un d’autre. Les échecs déjà validés resteront des échecs.</p>
+                {player.id === s.room.music_id && <p>Vous reprendrez le rôle de responsable musical.</p>}
+                <div className="actions">
+                  <button className="secondary" onClick={() => setRemoving(null)}>Annuler</button>
+                  <button className="danger" onClick={async () => {
+                    if (await act("remove_player", { playerId: player.id, confirmed: true })) setRemoving(null);
+                  }}>Supprimer définitivement ce joueur</button>
+                </div>
+              </div>
+            ) : <button className="secondary" onClick={() => setRemoving(player.id)}>Supprimer {player.name}</button>)}
+          </div>
+        ))}
+      </section>
       <section className="panel">
         <h2>Réglages de la soirée</h2>
         <form
@@ -942,12 +968,31 @@ function Admin({ s, act }: { s: State; act: Act }) {
         ))}
         <ChallengeEditor act={act} />
       </section>
+      <section className="panel">
+        <h2>Clore et effacer la soirée</h2>
+        <p>Cette action supprime définitivement la soirée pour tout le monde : profils, jetons, défis et demandes. Les codes d’accès ne fonctionneront plus.</p>
+        <p className="muted">Une soirée sans ouverture ni action pendant six mois est également supprimée automatiquement. Si le serveur est en pause, le nettoyage reprend à sa réactivation.</p>
+        {closing ? <form onSubmit={(e) => {
+          e.preventDefault();
+          void act("delete_room", { confirmed: true, roomCode: normalizeRoomCode(confirmationCode) });
+        }}>
+          <p>Pour confirmer, recopiez le code <strong>{s.room.code}</strong>.</p>
+          <Field label="Code de confirmation de suppression">
+            <input required autoComplete="off" value={confirmationCode} onChange={(e) => setConfirmationCode(e.target.value)} />
+          </Field>
+          <div className="actions">
+            <button type="button" className="secondary" onClick={() => { setClosing(false); setConfirmationCode(""); }}>Annuler</button>
+            <button className="danger" disabled={normalizeRoomCode(confirmationCode) !== s.room.code}>Effacer définitivement la soirée</button>
+          </div>
+        </form> : <button className="danger" onClick={() => setClosing(true)}>Clore et effacer la soirée</button>}
+      </section>
     </>
   );
 }
 
 export default function App() {
   const [roomId, setRoomId] = useState(storage.get("room"));
+  const activeRoom = useRef(roomId);
   const [state, setState] = useState<State | null>(() => {
     try {
       const saved = JSON.parse(storage.get("snapshot") ?? "null");
@@ -968,7 +1013,22 @@ export default function App() {
   const refreshRef = useRef(false);
   const [share, setShare] = useState(false);
   const [help, setHelp] = useState(false);
+  const clearRoom = useCallback((id: string | null) => {
+    if (id) storage.remove("recovery:" + id);
+    storage.remove("room");
+    storage.remove("snapshot");
+    storage.remove("pending");
+    activeRoom.current = null;
+    setRoomId(null);
+    setState(null);
+    setConnected(false);
+    setShare(false);
+    setHelp(false);
+    setTab("play");
+    history.replaceState(null, "", "/");
+  }, []);
   const enter = (id: string) => {
+    activeRoom.current = id;
     storage.set("room", id);
     setRoomId(id);
     setState(null);
@@ -981,6 +1041,7 @@ export default function App() {
     refreshRef.current = true;
     try {
       const snapshot = await readState(roomId);
+      if (activeRoom.current !== roomId) return;
       setState(snapshot);
       setConnected(true);
       clockOffset.current = Date.parse(snapshot.serverTime) - Date.now();
@@ -991,12 +1052,14 @@ export default function App() {
         /* The server remains authoritative if local storage is full. */
       }
     } catch (e) {
+      if (activeRoom.current !== roomId) return;
+      if (e instanceof SessionUnavailable) clearRoom(roomId);
       setConnected(false);
       setError(e instanceof Error ? e.message : "Connexion indisponible.");
     } finally {
       refreshRef.current = false;
     }
-  }, [roomId]);
+  }, [roomId, clearRoom]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => {
@@ -1050,10 +1113,11 @@ export default function App() {
     let ok = false;
     await run(async () => {
       if (kind === "test_push" && !isMobileDevice()) throw new Error(desktopNotificationsMessage);
-      await command(kind, { roomId, ...data });
+      const result = await command(kind, { roomId, ...data });
       ok = true;
       setMessage(actionFeedback(kind, data));
-      await refresh();
+      if (result.deleted) clearRoom(roomId);
+      else await refresh();
     });
     return ok;
   };
@@ -1062,7 +1126,8 @@ export default function App() {
       const p = pendingCommand();
       if (!p) return;
       const result = await command(p.kind, p.payload);
-      if (result.roomId) {
+      if (result.deleted) clearRoom(roomId);
+      else if (result.roomId) {
         const secret = storage.get("joiningSecret");
         if (secret) storage.set("recovery:" + result.roomId, secret);
         storage.remove("joiningSecret");
@@ -1088,6 +1153,8 @@ export default function App() {
       await sub?.unsubscribe();
       await supabase?.auth.signOut();
       storage.remove("room");
+      storage.remove("snapshot");
+      activeRoom.current = null;
       setRoomId(null);
       setState(null);
       setConnected(false);
@@ -1242,6 +1309,7 @@ export default function App() {
             className="text-button"
             onClick={() => {
               storage.remove("room");
+              activeRoom.current = null;
               setRoomId(null);
             }}
           >

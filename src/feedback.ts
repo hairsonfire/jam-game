@@ -25,6 +25,8 @@ export function actionFeedback(kind: string, data: Record<string, unknown> = {})
     skip_done: "Skip confirmé. Le jeton réservé a été utilisé.",
     reject: "Demande annulée. Le jeton a été rendu au joueur.",
     settings: "Les réglages de la soirée sont enregistrés.",
+    remove_player: "Le joueur et sa progression ont été supprimés. Ses demandes en attente sont annulées.",
+    delete_room: "La soirée et les profils des participants ont été définitivement supprimés.",
     challenge: "Défi enregistré. Il sera utilisé pour les prochains tirages.",
     subscribe: "Notifications activées sur cet appareil.",
     test_push: "Test demandé. Une notification devrait apparaître sur votre téléphone ; elle peut prendre quelques instants.",

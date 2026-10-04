@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
 
@@ -73,15 +73,8 @@ beforeAll(async () => {
   await db.exec(`create role anon; create role authenticated; create role service_role;
     create schema auth; create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-  await db.exec(
-    readFileSync("supabase/migrations/202610040001_jam.sql", "utf8"),
-  );
-  await db.exec(
-    readFileSync(
-      "supabase/migrations/202610040002_push_permission.sql",
-      "utf8",
-    ),
-  );
+  for (const name of readdirSync("supabase/migrations").filter(n => n.endsWith(".sql")).sort())
+    await db.exec(readFileSync("supabase/migrations/" + name, "utf8"));
 }, 30000);
 afterAll(async () => {
   await db?.close();
@@ -153,6 +146,94 @@ describe("Suppression manuelle d’une soirée", () => {
   });
 });
 
+describe("Administration des joueurs et fin de soirée", () => {
+  it("réserve les suppressions à l’admin et exige une confirmation", async () => {
+    for (const user of [bob, outsider]) {
+      await expect(cmd(user, "remove_player", { playerId: cId, confirmed: true })).rejects.toThrow();
+      await expect(cmd(user, "delete_room", { confirmed: true, roomCode: code })).rejects.toThrow();
+    }
+    await expect(cmd(alice, "remove_player", { playerId: bId })).rejects.toThrow(/Confirmez/);
+    await expect(cmd(alice, "remove_player", { playerId: aId, confirmed: true })).rejects.toThrow(/administrateur/);
+    await expect(cmd(alice, "delete_room", { confirmed: true, roomCode: "FAUX" })).rejects.toThrow(/code/);
+    await db.exec("set role authenticated");
+    await expect(db.query("select jam.purge_inactive_rooms()")).rejects.toThrow(/permission denied/);
+    await expect(db.query("select jam.erase_room($1)", [room])).rejects.toThrow(/permission denied/);
+    await db.exec("reset role");
+    expect((await state()).players).toHaveLength(3);
+  });
+
+  it("retire un témoin sans autoriser de nouveau verdict ni recommencer un échec", async () => {
+    const running = await start();
+    const failed = await start(carol);
+    await cmd(bob, "verdict", { ...failed, success: false });
+    const action = randomUUID();
+    const payload = { playerId: bId, confirmed: true };
+    await cmd(alice, "remove_player", payload, action);
+    await cmd(alice, "remove_player", payload, action);
+    await expect(cmd(bob, "verdict", { ...running, success: true, inTime: true })).rejects.toThrow();
+    const reset = (await state()).assignments[0];
+    expect(reset.status).toBe("assigned");
+    expect(reset.attempt_id).toBeNull();
+    expect(reset.started_at).toBeNull();
+    expect((await state(carol)).assignments[0].status).toBe("failed");
+    await expect(cmd(carol, "invite", { ...failed, witnessId: aId })).rejects.toThrow(/Après échec/);
+    await cmd(alice, "invite", { ...running, witnessId: cId });
+    expect((await state()).me.adds).toBe(0);
+  });
+
+  it("supprime les demandes et abonnements du joueur, et réattribue la musique", async () => {
+    await cmd(alice, "settings", { musicId: bId, bonus: 100, sacrifice: "Gage" });
+    await cmd(bob, "subscribe", { endpoint: "https://fcm.googleapis.com/fcm/send/remove", p256dh: "a".repeat(87), auth: "b".repeat(22) });
+    await win(bob, alice, aId);
+    await cmd(bob, "song", { text: "Ma chanson" });
+    await cmd(bob, "skip");
+    await cmd(alice, "remove_player", { playerId: bId, confirmed: true });
+    for (const table of ["requests", "assignments", "ledger", "subscriptions"])
+      expect(await query(`select id from jam.${table} where player_id=$1`, [bId])).toHaveLength(0);
+    expect((await state()).room.music_id).toBe(aId);
+    await expect(state(bob)).rejects.toThrow(/plus accès/);
+    await expect(cmd(bob, "recover", { code, recoveryHash: hash("bob"), newRecoveryHash: hash("next") })).rejects.toThrow(/incorrect/);
+    await cmd(bob, "join", { code, name: "Bob de retour", recoveryHash: hash("fresh") });
+    expect((await state(bob)).me.adds).toBe(0);
+    expect((await state(bob)).me.skip).toBe(false);
+  });
+
+  it("efface la soirée, permet la reprise du même clic et préserve une autre soirée", async () => {
+    const other = await cmd(carol, "create", { name: "Carole", roomName: "Autre", recoveryHash: hash("other") });
+    const action = randomUUID(), payload = { confirmed: true, roomCode: code };
+    expect(await cmd(alice, "delete_room", payload, action)).toEqual({ deleted: true });
+    expect(await cmd(alice, "delete_room", payload, action)).toEqual({ deleted: true });
+    await expect(state()).rejects.toThrow(/supprimée/);
+    expect(await query("select id from jam.rooms")).toEqual([{ id: other.roomId }]);
+    await expect(cmd(bob, "join", { code, name: "Bob", recoveryHash: hash("b2") })).rejects.toThrow(/introuvable/);
+  });
+
+  it("réinitialise l’inactivité sur lecture ou action réussie, pas sur un accès refusé", async () => {
+    const age = () => db.query("update jam.rooms set last_activity_at=now()-interval '7 months' where id=$1", [room]);
+    await age();
+    await expect(state(outsider)).rejects.toThrow();
+    expect((await query("select last_activity_at < now()-interval '6 months' old from jam.rooms"))[0].old).toBe(true);
+    await state();
+    expect((await query("select jam.purge_inactive_rooms() n"))[0].n).toBe(0);
+    await age();
+    await cmd(alice, "draw");
+    expect((await query("select jam.purge_inactive_rooms() n"))[0].n).toBe(0);
+  });
+
+  it("nettoie uniquement après six mois et supporte plusieurs passages", async () => {
+    await win();
+    await cmd(alice, "song", { text: "À supprimer" });
+    const other = await cmd(carol, "create", { name: "Carole", recoveryHash: hash("other") });
+    await db.query("update jam.rooms set last_activity_at=now()-interval '6 months'+interval '1 day' where id=$1", [room]);
+    expect((await query("select jam.purge_inactive_rooms() n"))[0].n).toBe(0);
+    await db.query("update jam.rooms set last_activity_at=now()-interval '6 months'-interval '1 day' where id=$1", [room]);
+    expect((await query("select jam.purge_inactive_rooms() n"))[0].n).toBe(1);
+    expect((await query("select jam.purge_inactive_rooms() n"))[0].n).toBe(0);
+    expect(await query("select id from jam.rooms")).toEqual([{ id: other.roomId }]);
+    expect(await query("select id from jam.requests")).toHaveLength(0);
+  });
+});
+
 describe("Accès, sessions et administration", () => {
   it("partage une soirée réelle, avec zéro jeton et aucun secret dans les états", async () => {
     const s = await state();
@@ -164,7 +245,7 @@ describe("Accès, sessions et administration", () => {
     expect((await state(bob)).room.id).toBe(room);
   });
   it("bloque les accès externes et les écritures directes", async () => {
-    await expect(state(outsider)).rejects.toThrow(/accès refusé/);
+    await expect(state(outsider)).rejects.toThrow(/plus accès/);
     await expect(cmd(outsider, "draw")).rejects.toThrow(/participez pas/);
     await db.exec("set role authenticated");
     await expect(db.query("update jam.players set adds=999")).rejects.toThrow(
@@ -187,7 +268,7 @@ describe("Accès, sessions et administration", () => {
     });
     expect((await state(outsider)).me.adds).toBe(1);
     expect((await state(outsider)).me.id).toBe(aId);
-    await expect(state(alice)).rejects.toThrow(/accès refusé/);
+    await expect(state(alice)).rejects.toThrow(/plus accès/);
     await expect(
       cmd(alice, "recover", {
         code,

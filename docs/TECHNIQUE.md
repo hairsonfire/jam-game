@@ -46,6 +46,7 @@ Les tests navigateur utilisent Edge installé par défaut. Sur un autre système
    - `supabase/migrations/202610040002_push_permission.sql`
    - `supabase/migrations/202610040003_neutral_wording.sql`
    - `supabase/migrations/202610040004_queue_completes_song.sql`
+   - `supabase/migrations/202610040005_room_lifecycle.sql`
 4. Copier l’URL du projet et la clé publique **anon** depuis les réglages API vers `.env.local`. **Jamais de clé `service_role` dans une variable `VITE_`**, dans Git ou dans le navigateur.
 5. Vérifier la limite d’authentifications anonymes par IP avant une soirée : plusieurs téléphones sur le même Wi-Fi partagent une IP. Supabase applique des limites distinctes des quotas de la base. Si nécessaire, régler la limite dans Authentication / Rate Limits ou faire rejoindre les participants en amont. L’application est prévue pour une soirée privée de 50 participants maximum.
 
@@ -105,6 +106,16 @@ Créer une soirée, sauvegarder son code personnel, puis ouvrir **? → Activer 
 5. Lancer la playlist dans votre application musicale, puis partager le lien/QR de la soirée.
 
 Pendant la soirée, aucun ordinateur n’est nécessaire. Le responsable copie le texte, agit dans son application musicale et confirme dans Jam. **« Ajouté à la file » termine la demande et libère immédiatement la place du joueur.** Le chrono ne valide rien automatiquement.
+
+## Suppression et durée de conservation
+
+Après la migration 005, exécuter `supabase/setup-cleanup-cron.sql` comme postgres. Le job `jam-room-cleanup` appelle chaque jour à 04:15 UTC une fonction privée ; aucun abonnement supplémentaire. Vérifier sa présence dans `cron.job` et ses résultats dans `cron.job_run_details`. Une base en pause ne peut pas exécuter ce job ; il reprend au prochain passage après réactivation.
+
+`jam.rooms.last_activity_at` est actualisé par une lecture autorisée de la soirée (y compris la synchronisation d’une application ouverte au premier plan) ou une commande réussie. Un accès refusé ou la relance des notifications ne prolonge pas la conservation. Le nettoyage supprime au maximum 100 soirées par passage, strictement après six mois calendaires d’inactivité, en ignorant temporairement les soirées verrouillées par une action. Les soirées existantes commencent leur délai au moment de la migration, leur activité passée n’étant pas connue.
+
+Les commandes `remove_player` et `delete_room` utilisent le même verrou transactionnel que le jeu, contrôlent le rôle administrateur et exigent une confirmation explicite. La suppression d’une soirée exige aussi son code. Le reçu de suppression permet de rejouer une réponse perdue. Les reçus précédents sont neutralisés pour empêcher de recréer un ancien profil ou une soirée en rejouant une action. Les comptes d’authentification partagés avec d’autres soirées sont conservés. La suppression d’un joueur n’est pas un bannissement : il peut rejoindre de nouveau à zéro. Les tentatives terminées des autres joueurs restent dans l’historique, sans référence au témoin supprimé.
+
+Le [script manuel avec aperçu](SUPPRIMER-UNE-SOIREE.md) reste disponible pour le propriétaire du serveur. La migration seule n’exécute aucune suppression de soirée.
 
 ## Architecture et cohérence
 

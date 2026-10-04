@@ -86,7 +86,13 @@ Vous pouvez consulter les dernières informations chargées. Les actions sont bl
 
 **Peut-on supprimer une soirée ?**
 
-Pas encore depuis l’application. La personne qui gère le serveur peut utiliser le [script de suppression avec aperçu](docs/SUPPRIMER-UNE-SOIREE.md). **Quitter ce profil** vous déconnecte sans effacer la soirée. Les soirées inutilisées ne sont actuellement pas supprimées automatiquement.
+Oui. Dans **Réglages → Clore et effacer la soirée**, l’administrateur recopie le code de la soirée pour confirmer. La suppression est définitive pour tous les participants. **Quitter ce profil** vous déconnecte sans effacer la soirée.
+
+Une soirée sans ouverture ni action pendant **six mois** est supprimée automatiquement lors du nettoyage quotidien. Si le serveur est en pause, le nettoyage reprend à sa réactivation. Pour les soirées existantes, ce délai commence lors de l’installation de cette fonctionnalité.
+
+**Peut-on supprimer un joueur ?**
+
+L’administrateur peut le faire dans **Réglages → Les participants**. Le profil, les jetons et les demandes de ce joueur sont supprimés. Les chansons déjà ajoutées dans votre application musicale y restent. Les épreuves dont il était témoin attendent un nouveau témoin ; un échec déjà validé reste un échec. S’il était responsable musical, l’administrateur reprend ce rôle. Le joueur peut revenir avec un profil neuf ; il ne récupère pas son ancienne progression.
 
 **Est-ce gratuit ?**
 

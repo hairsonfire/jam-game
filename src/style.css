@@ -451,6 +451,14 @@ fieldset {
 .danger {
   color: #ffb390;
 }
+button.danger:not(.text-button) {
+  background: #3a2520;
+  border: 1px solid #b47258;
+  border-radius: 12px;
+  padding: 14px 18px;
+  min-height: 48px;
+  font-weight: 650;
+}
 .app-layout {
   max-width: 1232px;
   margin: auto;

@@ -120,6 +120,34 @@ test("trois téléphones : défi, témoignage, chanson, régie, réglages et rec
     ),
   ).toBe(true);
   expect(issues).toEqual([]);
+  await alice.getByRole("button", { name: /Réglages/ }).click();
+  await alice.getByRole("button", { name: "Supprimer Bob", exact: true }).click();
+  await alice.getByRole("button", { name: "Annuler", exact: true }).click();
+  await expect(bob.getByRole("button", { name: /Témoigner/ })).toBeVisible();
+  await alice.getByRole("button", { name: "Supprimer Bob", exact: true }).click();
+  await alice.getByRole("button", { name: "Supprimer définitivement ce joueur" }).click();
+  await expect(alice.getByRole("button", { name: "Supprimer Bob", exact: true })).toHaveCount(0);
+  await expect(bob.getByRole("button", { name: "Rejoindre la soirée" })).toBeVisible();
+  expect(await bob.evaluate(() => localStorage.getItem("jam:snapshot"))).toBeNull();
+  await alice.getByRole("button", { name: "Clore et effacer la soirée", exact: true }).click();
+  await expect(alice.getByRole("button", { name: "Effacer définitivement la soirée" })).toBeDisabled();
+  await alice.getByLabel("Code de confirmation de suppression").fill(code);
+  await alice.screenshot({ path: "test-results/06-suppression-mobile.png", fullPage: true });
+  let deletionIntercepted = false;
+  await alice.route("**/rest/v1/rpc/game_command", async route => {
+    if (route.request().postDataJSON().kind === "delete_room" && !deletionIntercepted) {
+      deletionIntercepted = true;
+      await route.fetch();
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  await alice.getByRole("button", { name: "Effacer définitivement la soirée" }).click();
+  // Either state synchronization or replay of the lost response must exit the deleted room.
+  const retryButton = alice.getByRole("button", { name: "Vérifier la dernière action" });
+  if (await retryButton.isVisible()) await retryButton.click();
+  await expect(alice.getByRole("button", { name: "Rejoindre la soirée" })).toBeVisible();
+  await expect(carol.getByRole("button", { name: "Rejoindre la soirée" })).toBeVisible();
+  expect(await alice.evaluate(() => localStorage.getItem("jam:snapshot"))).toBeNull();
   await b.close();
   await c.close();
 });
@@ -168,7 +196,7 @@ test("une réponse perdue peut être revérifiée sans attribuer un deuxième d�
   await page
     .getByRole("button", { name: "Vérifier la dernière action" })
     .click();
-  await expect(page.getByText("Dernière action confirmée.")).toBeVisible();
+  await expect(page.getByText("Votre défi est prêt. Choisissez un ami pour être témoin.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Vérifier la dernière action" }),
   ).toHaveCount(0);

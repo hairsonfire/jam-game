@@ -1,7 +1,7 @@
 // Test-only HTTP adapter to run the *real SQL migrations* through the Supabase client.
 // It is never imported by the application or deployed. It is not a replacement auth server.
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 const db = new PGlite();
@@ -9,7 +9,7 @@ await db.waitReady;
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
-for (const name of ["202610040001_jam.sql", "202610040002_push_permission.sql"])
+for (const name of readdirSync("supabase/migrations").filter(n => n.endsWith(".sql")).sort())
   await db.exec(readFileSync("supabase/migrations/" + name, "utf8"));
 let queue = Promise.resolve();
 const users = new Map();
