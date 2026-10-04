@@ -1,0 +1,33 @@
+{
+  "name": "jam-soiree",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "preview": "vite preview --host 0.0.0.0",
+    "test:ui": "playwright test",
+    "check:push": "deno check --config supabase/functions/push-dispatch/deno.json supabase/functions/push-dispatch/index.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.10",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "deno": "^2.9.6",
+    "prettier": "^3.9.9",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.0",
+    "vitest": "^4.1.11"
+  }
+}

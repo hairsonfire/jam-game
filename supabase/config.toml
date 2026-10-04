@@ -1,0 +1,8 @@
+project_id = "jam-soiree"
+
+[auth]
+enabled = true
+enable_anonymous_sign_ins = true
+
+[functions.push-dispatch]
+verify_jwt = false
