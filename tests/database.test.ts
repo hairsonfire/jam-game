@@ -110,6 +110,49 @@ beforeEach(async () => {
   ).playerId;
 });
 
+describe("Suppression manuelle d’une soirée", () => {
+  const script = (roomCode: string, confirm = false, name = "") =>
+    readFileSync("supabase/delete-party.sql", "utf8")
+      .replace("code_soiree text := 'CODE_DE_LA_SOIREE'", `code_soiree text := '${roomCode}'`)
+      .replace("confirmer boolean := false", `confirmer boolean := ${confirm}`)
+      .replace("nom_attendu text := ''", `nom_attendu text := '${name}'`);
+
+  it("prévisualise sans supprimer et refuse un nom ou code incorrect", async () => {
+    await db.exec(script(code));
+    expect((await state()).players).toHaveLength(3);
+    for (const sql of [script(code, true, "Autre soirée"), script("INCONNU", true)]) {
+      await expect(db.exec(sql)).rejects.toThrow();
+      await db.exec("rollback");
+      expect((await state()).players).toHaveLength(3);
+    }
+  });
+
+  it("supprime les données liées, préserve les autres soirées et neutralise les reçus", async () => {
+    await cmd(alice, "subscribe", {
+      endpoint: "https://fcm.googleapis.com/fcm/send/deletion-test",
+      p256dh: "a".repeat(87), auth: "b".repeat(22),
+    });
+    await win();
+    await cmd(alice, "song", { text: "Chanson de test" });
+    const other = await cmd(alice, "create", {
+      name: "Alice", roomName: "À conserver", recoveryHash: hash("other"),
+    });
+    const before = await query("select * from jam.receipts where result->>'roomId'=$1", [other.roomId]);
+    await db.exec(script(code.toLowerCase().replace(/(.{4})/g, "$1-"), true, "Chez Alice"));
+    for (const table of ["assignments", "attempts", "requests", "ledger", "events", "subscriptions", "deliveries"]) {
+      expect((await query(`select count(*)::int n from jam.${table}`))[0].n).toBe(0);
+    }
+    expect((await query("select id from jam.rooms"))).toEqual([{ id: other.roomId }]);
+    expect((await query("select room_id from jam.players"))).toEqual([{ room_id: other.roomId }]);
+    expect((await query("select count(*)::int n from jam.challenges where room_id=$1", [other.roomId]))[0].n).toBe(4);
+    expect(await query("select * from jam.receipts where result->>'roomId'=$1", [other.roomId])).toEqual(before);
+    expect((await query("select count(*)::int n from jam.receipts where coalesce(result->>'roomId',payload->>'roomId')=$1", [room]))[0].n).toBe(0);
+    await expect(state()).rejects.toThrow();
+    await expect(db.exec(script(code, true, "Chez Alice"))).rejects.toThrow(/Aucune soirée/);
+    await db.exec("rollback");
+  });
+});
+
 describe("Accès, sessions et administration", () => {
   it("partage une soirée réelle, avec zéro jeton et aucun secret dans les états", async () => {
     const s = await state();

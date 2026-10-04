@@ -86,7 +86,7 @@ Vous pouvez consulter les dernières informations chargées. Les actions sont bl
 
 **Peut-on supprimer une soirée ?**
 
-Pas encore depuis l’application. **Quitter ce profil** vous déconnecte sans effacer la soirée. Les soirées inutilisées ne sont actuellement pas supprimées automatiquement.
+Pas encore depuis l’application. La personne qui gère le serveur peut utiliser le [script de suppression avec aperçu](docs/SUPPRIMER-UNE-SOIREE.md). **Quitter ce profil** vous déconnecte sans effacer la soirée. Les soirées inutilisées ne sont actuellement pas supprimées automatiquement.
 
 **Est-ce gratuit ?**
 
