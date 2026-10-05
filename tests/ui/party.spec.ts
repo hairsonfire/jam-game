@@ -1,5 +1,32 @@
 import { test, expect } from "@playwright/test";
 
+test("guide accessible avant connexion et installation proposée seulement si disponible", async ({ page }) => {
+  await page.goto("/?soiree=ABCDEF123456");
+  await page.getByRole("button", { name: "Comment jouer et installer Jam" }).click();
+  await expect(page.getByRole("heading", { name: "Aide et installation" })).toBeVisible();
+  await expect(page.getByText("ABCDEF123456", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "iPhone / iPad" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Installer Jam", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Android", exact: true }).click();
+  await expect(page.getByText("Ouvrez le menu du navigateur.", { exact: true })).toBeVisible();
+  // Emulate the optional browser event, without installing anything on this computer.
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(event, { prompt: async () => ({ outcome: "dismissed" }) });
+    window.dispatchEvent(event);
+  });
+  await page.getByRole("button", { name: "Installer Jam", exact: true }).click();
+  await expect(page.getByText("Vous pouvez continuer à jouer ici et installer Jam plus tard.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Installer Jam", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "iPhone / iPad" }).click();
+  await page.getByRole("heading", { name: "Jam sur votre écran d’accueil" }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/08-guide-installation.png" });
+  await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
+  await expect(page.getByText(/Jam est déjà installé ou ouvert/)).toBeVisible();
+  await page.getByRole("button", { name: "← Retour" }).click();
+  await expect(page.getByLabel("Code de la soirée")).toHaveValue("ABCDEF123456");
+});
+
 test("trois téléphones : défi, témoignage, chanson, régie, réglages et reconnexion", async ({
   browser,
   page: alice,

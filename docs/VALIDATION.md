@@ -63,6 +63,12 @@ Les systèmes peuvent retarder ou masquer une notification. Cela ne doit jamais 
 
 ## Critère final d’acceptation
 
+### Guide de démarrage et d’installation — 5 octobre 2026
+
+- Guide disponible avant connexion et pendant la soirée : fonctionnement du jeu, étapes selon le téléphone, aide si le menu d’installation manque, préservation du code de soirée et rappel de récupération du profil.
+- Installation directe proposée seulement après `beforeinstallprompt`, traitement d’une annulation et masquage après `appinstalled` ou ouverture en mode autonome. Les événements d’installation sont simulés dans un test navigateur ; aucune installation réelle sur téléphone n’est revendiquée.
+- Références : [installation sur iPhone](https://support.apple.com/fr-fr/guide/iphone/iphea86e5236/ios), [événement d’installation et disponibilité](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeinstallprompt_event).
+
 ### Navigation mobile — 5 octobre 2026
 
 - Icônes SVG de 24 × 24 pixels, traits et couleur communs, sans emoji système. Capture mobile vérifiée dans le navigateur de test.

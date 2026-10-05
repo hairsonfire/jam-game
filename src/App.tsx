@@ -1,4 +1,5 @@
 import { NavIcon } from "./NavIcon";
+import { InstallGuide, QuickStart, useInstallation } from "./GettingStarted";
 import { actionFeedback, isMobileDevice, desktopNotificationsMessage } from "./feedback";
 import {
   useCallback,
@@ -126,10 +127,12 @@ function Access({
   enter,
   busy,
   run,
+  showGuide,
 }: {
   enter: (id: string) => void;
   busy: boolean;
   run: (work: () => Promise<void>) => Promise<void>;
+  showGuide: () => void;
 }) {
   const [mode, setMode] = useState<"join" | "create" | "recover">("join");
   const [code, setCode] = useState(
@@ -191,6 +194,11 @@ function Access({
         </div>
       </section>
       <section className="entry panel">
+        <div className="welcome-guide">
+          <h2>Première soirée sur Jam ?</h2>
+          <p>Un défi, un ami pour valider, puis une chanson à proposer.</p>
+          <button className="secondary full" onClick={showGuide}>Comment jouer et installer Jam</button>
+        </div>
         <div className="tabs access-tabs">
           {(["join", "create", "recover"] as const).map((m) => (
             <button
@@ -974,6 +982,7 @@ function Admin({ s, act }: { s: State; act: Act }) {
 }
 
 export default function App() {
+  const installation = useInstallation();
   const [roomId, setRoomId] = useState(storage.get("room"));
   const activeRoom = useRef(roomId);
   const [state, setState] = useState<State | null>(() => {
@@ -1171,17 +1180,23 @@ export default function App() {
         <section className="panel auxiliary-page">
           <button className="text-button" onClick={() => setPage(null)}>← Retour</button>
           <h1>Aide et installation</h1>
-          <p>
-            Dans le menu de votre navigateur, choisissez « Installer l’application »
-            ou « Ajouter à l’écran d’accueil ». Cette option peut aussi se trouver
-            dans le menu « Partager ». Ouvrez ensuite Jam depuis sa nouvelle icône.
-          </p>
-          <p>
-            Choisissez une chanson dans Jam. La personne qui contrôle la musique reçoit votre demande et l’ajoute à la file.
-          </p>
+          <h2>Votre première chanson en trois étapes</h2>
+          <QuickStart />
+          <p className="muted">Jouer est facultatif. La musique continue pendant que vous profitez de la soirée.</p>
+          {state && !installation.installed && <>
+            <p>Avant l’installation, gardez votre code personnel. Si Jam vous redemande un profil, choisissez « Récupérer » avec ce code et celui de la soirée.</p>
+            <Recovery roomId={state.room.id} />
+          </>}
+          <InstallGuide installation={installation} />
+          {(state?.room.code || new URLSearchParams(location.search).get("soiree")) && <div className="notice">
+            <p>Gardez aussi le code de la soirée pour la retrouver après l’installation.</p>
+            <code className="secret">{state?.room.code ?? normalizeRoomCode(new URLSearchParams(location.search).get("soiree") ?? "")}</code>
+          </div>}
+          <h2>Être prévenu sur son téléphone</h2>
           <p>
             Activez les notifications pour être prévenu même quand Jam est fermé. Si vous n’en recevez pas, vos demandes et invitations restent visibles dans l’application.
           </p>
+          {!state && <p>Une fois dans la soirée, revenez ici avec le bouton « ? » pour activer et tester les notifications. Sur iPhone, ouvrez d’abord Jam depuis son icône sur l’écran d’accueil.</p>}
           {state && (
             <div className="actions">
               {!isMobileDevice() ? <p role="note">{desktopNotificationsMessage}</p> : <>
@@ -1238,6 +1253,7 @@ export default function App() {
                   text={location.origin + "/?soiree=" + normalizeRoomCode(state.room.code)}
                   label="Copier le lien d’invitation"
                 />
+                <Copy label="Copier un message pour les amis" text={`Rejoins notre soirée sur Jam : ${location.origin}/?soiree=${normalizeRoomCode(state.room.code)}\nCode : ${normalizeRoomCode(state.room.code)}\nChoisis ton pseudo, relève un défi avec un ami comme témoin, puis propose ta chanson !\nPour installer Jam sur ton téléphone, ouvre « Comment jouer et installer Jam » sur l’accueil. Tu peux aussi jouer sans installer.`} />
               </div>
             </div></section>
 
@@ -1329,7 +1345,7 @@ export default function App() {
           </button>
         </main>
       ) : !state ? (
-        <Access enter={enter} busy={busy} run={run} />
+        <Access enter={enter} busy={busy} run={run} showGuide={() => setPage("help")} />
       ) : (
         <>
           {taylor && !page && (

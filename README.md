@@ -68,6 +68,8 @@ Pour un skip, vérifiez le morceau réellement en cours avant d’agir. S’il a
 
 ## Installer Jam et recevoir les notifications
 
+Sur l’accueil, **Comment jouer et installer Jam** explique le jeu en trois étapes et affiche un guide iPhone/iPad ou Android. Si le navigateur propose une installation directe, le bouton **Installer Jam** apparaît. Vous pouvez toujours jouer sans installer. Le guide reste disponible avec **?** ; dans **Inviter · QR code**, **Copier un message pour les amis** prépare le lien et les explications à partager.
+
 Dans le menu de votre navigateur, choisissez **Installer l’application** ou **Ajouter à l’écran d’accueil**. Cette option peut aussi se trouver dans **Partager**. Ouvrez ensuite Jam depuis sa nouvelle icône.
 
 Une fois dans une soirée, appuyez sur **?**, en haut à droite, puis sur **Activer les notifications** et **Tester mes notifications**. Les notifications de Jam sont disponibles sur téléphone ; elles sont désactivées sur ordinateur.
