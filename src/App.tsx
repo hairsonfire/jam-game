@@ -1,3 +1,4 @@
+import { NavIcon } from "./NavIcon";
 import { actionFeedback, isMobileDevice, desktopNotificationsMessage } from "./feedback";
 import {
   useCallback,
@@ -347,7 +348,7 @@ function Play({ state: s, act, now }: { state: State; act: Act; now: number }) {
             </p>
             {cooldown > now ? (
               <>
-                <p>Après un abandon, prenez deux minutes.</p>
+                <p>Après un abandon, prenez dix minutes.</p>
                 <Countdown end={cooldown} now={now} />
               </>
             ) : (
@@ -454,7 +455,7 @@ function Play({ state: s, act, now }: { state: State; act: Act; now: number }) {
                 onClick={() => {
                   if (
                     confirm(
-                      "Abandonner cette épreuve ? Vous devrez attendre deux minutes avant le prochain défi.",
+                      "Abandonner cette épreuve ? Vous devrez attendre dix minutes avant le prochain défi.",
                     )
                   )
                     void act("abandon", { assignmentId: a.id });
@@ -471,39 +472,7 @@ function Play({ state: s, act, now }: { state: State; act: Act; now: number }) {
           </>
         )}
       </section>
-      <div className="note-strip">
-        <span>✦</span>
-        <p>
-          Un défi validé = <strong>1 jeton d’ajout</strong>. Bonus skip :{" "}
-          {s.room.bonus} %, si vous n’avez pas déjà un jeton de skip.
-        </p>
-      </div>
       <Recovery roomId={s.room.id} />
-      <details className="disclosure">
-        <summary>Mes derniers mouvements de jetons</summary>
-        {s.ledger.length ? (
-          s.ledger.map((l) => (
-            <p key={l.id}>
-              {time(l.created_at)} ·{" "}
-              {
-                (
-                  {
-                    reward: "Récompense",
-                    spend: "Dépense",
-                    reserve: "Skip réservé",
-                    refund: "Restitution",
-                  } as Record<string, string>
-                )[l.operation]
-              }{" "}
-              · ajout {l.adds > 0 ? "+" : ""}
-              {l.adds} · skip {l.skip > 0 ? "+" : ""}
-              {l.skip}
-            </p>
-          ))
-        ) : (
-          <p>Votre historique commencera à la première réussite.</p>
-        )}
-      </details>
     </>
   );
 }
@@ -1011,8 +980,7 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const clockOffset = useRef(0);
   const refreshRef = useRef(false);
-  const [share, setShare] = useState(false);
-  const [help, setHelp] = useState(false);
+  const [page, setPage] = useState<"help" | "share" | null>(null);
   const clearRoom = useCallback((id: string | null) => {
     if (id) storage.remove("recovery:" + id);
     storage.remove("room");
@@ -1022,12 +990,12 @@ export default function App() {
     setRoomId(null);
     setState(null);
     setConnected(false);
-    setShare(false);
-    setHelp(false);
+    setPage(null);
     setTab("play");
     history.replaceState(null, "", "/");
   }, []);
   const enter = (id: string) => {
+    setPage(null);
     activeRoom.current = id;
     storage.set("room", id);
     setRoomId(id);
@@ -1152,6 +1120,7 @@ export default function App() {
         await command("unsubscribe", { roomId, endpoint: sub.endpoint });
       await sub?.unsubscribe();
       await supabase?.auth.signOut();
+      setPage(null);
       storage.remove("room");
       storage.remove("snapshot");
       activeRoom.current = null;
@@ -1169,60 +1138,25 @@ export default function App() {
   const tasks =
     state?.requests.filter((r) => r.status === "pending") ??
     [];
-  const tabs: { id: Tab; text: string; symbol: string; count?: number }[] = [
-    { id: "play", text: "Jouer", symbol: "✦" },
+  const tabs: { id: Tab; text: string; count?: number }[] = [
+    { id: "play", text: "Jouer" },
     {
       id: "witness",
       text: "Témoigner",
-      symbol: "◎",
       count: invitations.length,
     },
-    { id: "music", text: "Musique", symbol: "♫" },
+    { id: "music", text: "Musique" },
   ];
   if (state?.me.id === state?.room.music_id && state)
-    tabs.push({ id: "dj", text: "Régie", symbol: "≋", count: tasks.length });
+    tabs.push({ id: "dj", text: "Régie", count: tasks.length });
   if (state?.me.id === state?.room.admin_id && state)
-    tabs.push({ id: "admin", text: "Réglages", symbol: "⚙" });
-  const currentTab = tabs.some((t) => t.id === tab) ? tab : "play";
+    tabs.push({ id: "admin", text: "Réglages" });
+  const currentTab = page ? null : tabs.some((t) => t.id === tab) ? tab : "play";
   const taylor = state?.events.find((e) => e.kind === "taylor");
-  return (
-    <>
-      <header className="site-header">
-        <a className="brand" href="/" aria-label="Jam, accueil">
-          jam<span>●</span>
-        </a>
-        <div className="header-right">
-          {state && (
-            <button className="room-button" aria-expanded={share} aria-controls="room-share" onClick={() => setShare(!share)}>
-              Inviter · QR code <span>↗</span>
-            </button>
-          )}
-          <span
-            className={
-              "connection " + (online && (!roomId || connected) ? "ok" : "")
-            }
-          >
-            <i />
-            {!online
-              ? "Hors connexion"
-              : roomId
-                ? connected
-                  ? "Connecté"
-                  : "Reconnexion…"
-                : "Entre amis"}
-          </span>
-          <button
-            className="help-button"
-            onClick={() => setHelp(!help)}
-            aria-label="Aide et installation"
-          >
-            ?
-          </button>
-        </div>
-      </header>
-      {help && (
-        <aside className="help panel">
-          <h2>Votre soirée, dans la poche.</h2>
+  const helpContent = (
+        <section className="panel auxiliary-page">
+          <button className="text-button" onClick={() => setPage(null)}>← Retour</button>
+          <h1>Aide et installation</h1>
           <p>
             Dans le menu de votre navigateur, choisissez « Installer l’application »
             ou « Ajouter à l’écran d’accueil ». Cette option peut aussi se trouver
@@ -1264,8 +1198,72 @@ export default function App() {
               </button>
             </div>
           )}
-        </aside>
-      )}
+        </section>
+
+  );
+  const shareContent = state && (
+            <section id="room-share" className="panel auxiliary-page">
+              <button className="text-button" onClick={() => setPage(null)}>← Retour</button>
+              <h1>Inviter des amis</h1>
+              <div className="share">
+              <QRCodeSVG
+                value={location.origin + "/?soiree=" + normalizeRoomCode(state.room.code)}
+                title="Scanner pour rejoindre la soirée"
+                size={200}
+                bgColor="#ffffff"
+                fgColor="#101a17"
+                marginSize={3}
+              />
+              <div>
+                <h2>{state.room.name}</h2>
+                <p>Scannez ce QR code ou partagez le lien.</p>
+                <p>Code de la soirée</p>
+                <code className="secret">{normalizeRoomCode(state.room.code)}</code>
+                <Copy text={normalizeRoomCode(state.room.code)} label="Copier le code sans tirets" />
+                <Copy
+                  text={location.origin + "/?soiree=" + normalizeRoomCode(state.room.code)}
+                  label="Copier le lien d’invitation"
+                />
+              </div>
+            </div></section>
+
+  );
+  return (
+    <>
+      <header className="site-header">
+        <a className="brand" href="/" aria-label="Jam, accueil">
+          jam<span>●</span>
+        </a>
+        <div className="header-right">
+          {state && (
+            <button className="room-button" aria-pressed={page === "share"} onClick={() => setPage(page === "share" ? null : "share")}>
+              Inviter · QR code <span>↗</span>
+            </button>
+          )}
+          <span
+            className={
+              "connection " + (online && (!roomId || connected) ? "ok" : "")
+            }
+          >
+            <i />
+            {!online
+              ? "Hors connexion"
+              : roomId
+                ? connected
+                  ? "Connecté"
+                  : "Reconnexion…"
+                : "Entre amis"}
+          </span>
+          <button
+            className="help-button"
+            aria-pressed={page === "help"}
+            onClick={() => setPage(page === "help" ? null : "help")}
+            aria-label="Aide et installation"
+          >
+            ?
+          </button>
+        </div>
+      </header>
       {error && (
         <div className="flash error" role="alert">
           <span>{error}</span>
@@ -1294,7 +1292,7 @@ export default function App() {
           </button>
         </div>
       )}
-      {roomId && !state ? (
+      {page === "help" && !state ? <main className="game-main">{helpContent}</main> : roomId && !state ? (
         <main className="loading panel">
           <h1>Retrouvons votre soirée.</h1>
           <p>
@@ -1320,30 +1318,7 @@ export default function App() {
         <Access enter={enter} busy={busy} run={run} />
       ) : (
         <>
-          {share && (
-            <aside id="room-share" className="share panel">
-              <QRCodeSVG
-                value={location.origin + "/?soiree=" + normalizeRoomCode(state.room.code)}
-                title="Scanner pour rejoindre la soirée"
-                size={200}
-                bgColor="#ffffff"
-                fgColor="#101a17"
-                marginSize={3}
-              />
-              <div>
-                <h2>{state.room.name}</h2>
-                <p>Scannez ce QR code ou partagez le lien.</p>
-                <p>Code de la soirée</p>
-                <code className="secret">{normalizeRoomCode(state.room.code)}</code>
-                <Copy text={normalizeRoomCode(state.room.code)} label="Copier le code sans tirets" />
-                <Copy
-                  text={location.origin + "/?soiree=" + normalizeRoomCode(state.room.code)}
-                  label="Copier le lien d’invitation"
-                />
-              </div>
-            </aside>
-          )}
-          {taylor && (
+          {taylor && !page && (
             <div className="taylor" key={taylor.id}>
               {taylor.body}
               <small>Ajout confirmé à {time(taylor.created_at)}</small>
@@ -1355,9 +1330,9 @@ export default function App() {
                 <button
                   key={t.id}
                   className={currentTab === t.id ? "active" : ""}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => { setPage(null); setTab(t.id); window.scrollTo(0, 0); }}
                 >
-                  <span className="nav-icon">{t.symbol}</span>
+                  <NavIcon name={t.id} />
                   <span>{t.text}</span>
                   {!!t.count && <b>{t.count}</b>}
                 </button>
@@ -1369,6 +1344,7 @@ export default function App() {
               </div>
             </nav>
             <main className="game-main">
+              {page === "help" ? helpContent : page === "share" ? shareContent : <>
               <fieldset
                 className="game-fieldset"
                 disabled={busy || !online || !connected}
@@ -1444,6 +1420,7 @@ export default function App() {
                   synchronisation avec le serveur.
                 </div>
               ) : null}
+              </>}
             </main>
           </div>
         </>

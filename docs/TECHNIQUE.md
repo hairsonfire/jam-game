@@ -47,6 +47,7 @@ Les tests navigateur utilisent Edge installé par défaut. Sur un autre système
    - `supabase/migrations/202610040003_neutral_wording.sql`
    - `supabase/migrations/202610040004_queue_completes_song.sql`
    - `supabase/migrations/202610040005_room_lifecycle.sql`
+   - `supabase/migrations/202610050006_abandon_ten_minutes.sql`
 4. Copier l’URL du projet et la clé publique **anon** depuis les réglages API vers `.env.local`. **Jamais de clé `service_role` dans une variable `VITE_`**, dans Git ou dans le navigateur.
 5. Vérifier la limite d’authentifications anonymes par IP avant une soirée : plusieurs téléphones sur le même Wi-Fi partagent une IP. Supabase applique des limites distinctes des quotas de la base. Si nécessaire, régler la limite dans Authentication / Rate Limits ou faire rejoindre les participants en amont. L’application est prévue pour une soirée privée de 50 participants maximum.
 

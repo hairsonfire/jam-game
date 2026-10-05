@@ -47,6 +47,23 @@ test("trois téléphones : défi, témoignage, chanson, régie, réglages et rec
   }
   await alice.getByRole("button", { name: /Inviter · QR code/ }).click();
   await expect(alice.getByText("3 participants")).toBeVisible();
+  await expect(alice.getByText(/Un défi validé =/)).toHaveCount(0);
+  await expect(alice.getByText("Mes derniers mouvements de jetons")).toHaveCount(0);
+  expect(await alice.locator(".navigation svg").count()).toBe(5);
+  const iconSizes = await alice.locator(".navigation svg").evaluateAll(icons => icons.map(icon => {
+    const { width, height } = icon.getBoundingClientRect(); return [width, height];
+  }));
+  expect(iconSizes).toEqual(Array(5).fill([24, 24]));
+  await alice.getByRole("button", { name: "Aide et installation" }).click();
+  await expect(alice.getByRole("heading", { name: "Aide et installation" })).toBeVisible();
+  await expect(alice.getByRole("button", { name: "Tirer un défi" })).toHaveCount(0);
+  await alice.getByRole("button", { name: /Inviter · QR code/ }).click();
+  await expect(alice.getByRole("heading", { name: "Inviter des amis" })).toBeVisible();
+  await expect(alice.getByRole("heading", { name: "Aide et installation" })).toHaveCount(0);
+  await alice.getByRole("button", { name: "Musique", exact: false }).click();
+  await expect(alice.getByRole("heading", { name: "Inviter des amis" })).toHaveCount(0);
+  await alice.getByRole("button", { name: "Jouer", exact: false }).click();
+  await alice.screenshot({ path: "test-results/07-navigation-mobile.png", fullPage: true });
   await alice.getByRole("button", { name: "Tirer un défi" }).click();
   await alice.getByLabel("Choisir un témoin").selectOption({ label: "Bob" });
   await alice.getByRole("button", { name: "Demander son accord" }).click();

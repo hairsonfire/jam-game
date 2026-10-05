@@ -52,7 +52,7 @@ Les systèmes peuvent retarder ou masquer une notification. Cela ne doit jamais 
 2. A tire un défi, choisit B ; aucun chrono ni récompense avant acceptation. B accepte et valide après avoir constaté la réussite dans le délai. Vérifier un seul crédit.
 3. Répéter un envoi ou une validation depuis deux onglets du même profil. Le deuxième effet doit être refusé ou renvoyer le résultat du premier.
 4. Inviter B, le remplacer par C et tenter de valider depuis l’ancien écran de B. Aucun crédit.
-5. Tester échec, sacrifice configuré, sacrifice refusé et abandon avec blocage de deux minutes.
+5. Tester échec, sacrifice configuré, sacrifice refusé et abandon avec blocage de dix minutes.
 6. Proposer une chanson. « Ajouté à la file » termine la demande et libère la place. Tester un refus avant ajout et vérifier un seul remboursement ; refuser toute annulation ou nouvelle confirmation après ajout.
 7. Passer temporairement le bonus à 100 %. A et B gagnent chacun un skip et le demandent au même instant. Une seule demande est ouverte, l’autre jeton reste disponible. Vérifier qu’un skip réservé bloque le bonus suivant et qu’un refus le restitue.
 8. Confirmer un skip réellement exécuté. Puis tester un skip devenu caduc après changement naturel, avec annulation/remboursement.
@@ -62,6 +62,14 @@ Les systèmes peuvent retarder ou masquer une notification. Cela ne doit jamais 
 12. Remettre le taux de bonus à **0 %** et faire une répétition avec Spotify, sans ordinateur.
 
 ## Critère final d’acceptation
+
+### Navigation mobile — 5 octobre 2026
+
+- Icônes SVG de 24 × 24 pixels, traits et couleur communs, sans emoji système. Capture mobile vérifiée dans le navigateur de test.
+- Texte de récompense et historique des mouvements retirés de l’écran Jouer. Aide et invitation sont des vues exclusives avec retour et navigation vers les autres rubriques.
+- 27 tests SQL et 3 tests navigateur passent, dont les dimensions des cinq icônes, la fermeture des pages annexes et le blocage serveur après abandon pendant dix minutes.
+- Migration 006 appliquée sur Supabase : délai de dix minutes vérifié dans la commande serveur. Les pauses encore actives sont prolongées de huit minutes ; les anciennes pauses terminées ne sont pas réactivées.
+- Interface construite dans `dist`, à publier manuellement sur Vercel. Rendu sur iPhone réel à vérifier après publication.
 
 ### Gestion des participants — 4 octobre 2026
 

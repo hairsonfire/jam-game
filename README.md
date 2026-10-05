@@ -29,7 +29,7 @@ Le chronomètre ne décide pas du résultat. Le témoin peut valider après la f
 - **Témoin indisponible :** choisissez-en un autre. Si l’épreuve avait commencé, elle recommence avec son accord. Ce remplacement ne permet pas de retenter un défi déjà déclaré raté.
 - **Défi raté :** choisissez le « sacrifice liquide » prévu par l’organisateur, ou abandonnez. Il n’y a pas de deuxième tentative du même défi après un échec.
 - **Sacrifice liquide :** c’est une alternative dont le contenu est choisi dans les réglages de la soirée. Elle reste indisponible tant qu’elle n’a pas été configurée. Sa réussite donne un jeton d’ajout ; après un sacrifice raté, seul l’abandon reste possible.
-- **Abandon :** attendez deux minutes avant de tirer un nouveau défi.
+- **Abandon :** attendez dix minutes avant de tirer un nouveau défi.
 
 ## Demander de la musique
 

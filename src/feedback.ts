@@ -18,7 +18,7 @@ export function actionFeedback(kind: string, data: Record<string, unknown> = {})
     accept: "C’est parti ! L’épreuve commence maintenant.",
     decline: "Invitation refusée. Le joueur peut choisir un autre témoin.",
     sacrifice: "Le sacrifice remplace votre défi. Choisissez votre témoin.",
-    abandon: "Épreuve abandonnée. Vous pourrez tirer un nouveau défi dans deux minutes.",
+    abandon: "Épreuve abandonnée. Vous pourrez tirer un nouveau défi dans dix minutes.",
     song: "Chanson demandée ! La personne qui contrôle la musique a reçu votre demande. Un jeton a été utilisé.",
     queue: "Chanson ajoutée à la file ! La demande est terminée, le joueur peut en proposer une autre.",
     skip: "Demande de skip envoyée. Votre jeton est réservé en attendant la réponse.",

@@ -425,7 +425,7 @@ describe("Épreuves et récompenses", () => {
     );
     expect(row.bonus_roll).toBeNull();
   });
-  it("un sacrifice refusé laisse seulement l’abandon, qui impose deux minutes", async () => {
+  it("un sacrifice refusé laisse seulement l’abandon, qui impose dix minutes", async () => {
     await cmd(alice, "settings", { musicId: aId, bonus: 0, sacrifice: "Gage" });
     const id = await assigned();
     await cmd(alice, "sacrifice", { assignmentId: id });
@@ -444,11 +444,15 @@ describe("Épreuves et récompenses", () => {
       cmd(alice, "invite", { assignmentId: id, witnessId: cId }),
     ).rejects.toThrow(/Après échec/);
     await cmd(alice, "abandon", { assignmentId: id });
-    await expect(cmd(alice, "draw")).rejects.toThrow(/deux minutes/);
+    await expect(cmd(alice, "draw")).rejects.toThrow(/dix minutes/);
     const s = await state();
     expect(
       Date.parse(s.me.cooldown_until) - Date.parse(s.serverTime),
-    ).toBeGreaterThan(118000);
+    ).toBeGreaterThan(598000);
+    await db.query("update jam.players set cooldown_until=now()+interval '7 minutes' where id=$1", [aId]);
+    await expect(cmd(alice, "draw")).rejects.toThrow(/dix minutes/);
+    await db.query("update jam.players set cooldown_until=now()-interval '1 second' where id=$1", [aId]);
+    await expect(cmd(alice, "draw")).resolves.toHaveProperty("assignmentId");
   });
   it("respecte 100 %, le plafond et la réservation du skip", async () => {
     await cmd(alice, "settings", { musicId: aId, bonus: 100, sacrifice: "" });
