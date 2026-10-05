@@ -21,7 +21,21 @@ import {
   storage,
   supabase,
 } from "./api";
-import type { Assignment, Challenge, Request, State } from "./types";
+import type { Assignment, Challenge, GameEvent, Request, State } from "./types";
+
+function TaylorNotice({ event, roomId }: { event: GameEvent; roomId: string }) {
+  const key = "dismissed-taylor:" + roomId;
+  const [dismissed, setDismissed] = useState(() => storage.get(key));
+  if (dismissed === event.id) return null;
+  return <div className="taylor">
+    <button className="taylor-close" aria-label="Fermer l’alerte Taylor Swift" onClick={() => {
+      setDismissed(event.id);
+      try { storage.set(key, event.id); } catch { /* Keep dismissal for this visit if storage is unavailable. */ }
+    }}>×</button>
+    {event.body}
+    <small>Ajout confirmé à {time(event.created_at)}</small>
+  </div>;
+}
 
 type Tab = "play" | "witness" | "music" | "dj" | "admin";
 type Act = (kind: string, data?: Record<string, unknown>) => Promise<boolean>;
@@ -1319,10 +1333,7 @@ export default function App() {
       ) : (
         <>
           {taylor && !page && (
-            <div className="taylor" key={taylor.id}>
-              {taylor.body}
-              <small>Ajout confirmé à {time(taylor.created_at)}</small>
-            </div>
+            <TaylorNotice key={state.room.id} event={taylor} roomId={state.room.id} />
           )}
           <div className="app-layout">
             <nav className="navigation" aria-label="Navigation principale">

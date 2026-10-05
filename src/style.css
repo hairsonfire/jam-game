@@ -733,11 +733,12 @@ button.danger:not(.text-button) {
   margin: 0;
 }
 .taylor {
+  position: relative;
   max-width: 1000px;
   margin: 20px auto;
   background: var(--orange);
   color: #291e13;
-  padding: 20px 25px;
+  padding: 20px 56px 20px 25px;
   border-radius: 15px;
   font-weight: 800;
 }
@@ -746,6 +747,20 @@ button.danger:not(.text-button) {
   font-weight: 400;
   margin-top: 6px;
 }
+.taylor-close {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: inherit;
+  font-size: 1.6rem;
+  border-radius: 8px;
+}
+.taylor-close:focus-visible { outline-color: #291e13; }
 .loading {
   max-width: 700px;
   margin: 60px auto;
