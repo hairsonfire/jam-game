@@ -1,4 +1,5 @@
 import { NavIcon } from "./NavIcon";
+import { SpotifyHost, SpotifyMusic } from "./Spotify";
 import { InstallGuide, QuickStart, useInstallation } from "./GettingStarted";
 import { actionFeedback, isMobileDevice, desktopNotificationsMessage } from "./feedback";
 import {
@@ -21,6 +22,7 @@ import {
   recoveryHash,
   storage,
   supabase,
+  spotifyCall,
 } from "./api";
 import type { Assignment, Challenge, GameEvent, Request, State } from "./types";
 
@@ -1003,6 +1005,8 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const clockOffset = useRef(0);
   const refreshRef = useRef(false);
+  const spotifySyncRef = useRef(false);
+  const spotifyCallbackRef = useRef(false);
   const [page, setPage] = useState<"help" | "share" | null>(null);
   const clearRoom = useCallback((id: string | null) => {
     if (id) storage.remove("recovery:" + id);
@@ -1034,6 +1038,10 @@ export default function App() {
       const snapshot = await readState(roomId);
       if (activeRoom.current !== roomId) return;
       setState(snapshot);
+      if (snapshot.spotify?.connected && !spotifySyncRef.current) {
+        spotifySyncRef.current = true;
+        void spotifyCall(roomId, "sync").catch(() => {}).finally(() => { spotifySyncRef.current = false; });
+      }
       setConnected(true);
       clockOffset.current = Date.parse(snapshot.serverTime) - Date.now();
       setNow(Date.parse(snapshot.serverTime));
@@ -1051,6 +1059,21 @@ export default function App() {
       refreshRef.current = false;
     }
   }, [roomId, clearRoom]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("spotify") !== "callback" || spotifyCallbackRef.current) return;
+    spotifyCallbackRef.current = true;
+    const id = sessionStorage.getItem("jam:spotify-room");
+    sessionStorage.removeItem("jam:spotify-room");
+    history.replaceState(null, "", "/");
+    void run(async () => {
+      if (!id || !params.get("code") || params.get("error")) throw new Error("Connexion Spotify annulée ou expirée. Recommencez depuis la régie.");
+      await spotifyCall(id, "callback", { code: params.get("code"), state: params.get("state") });
+      setTab("dj");
+      setMessage("Spotify est connecté. Lancez la musique sur l’appareil de la soirée.");
+      await refresh();
+    });
+  }, [refresh]);
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => {
@@ -1105,6 +1128,9 @@ export default function App() {
     await run(async () => {
       if (kind === "test_push" && !isMobileDevice()) throw new Error(desktopNotificationsMessage);
       const result = await command(kind, { roomId, ...data });
+      if (kind.startsWith("spotify_") && roomId) {
+        try { await spotifyCall(roomId, "sync"); } catch { /* The persisted job remains visible and will be retried by synchronization. */ }
+      }
       ok = true;
       setMessage(actionFeedback(kind, data));
       if (result.deleted) clearRoom(roomId);
@@ -1400,11 +1426,13 @@ export default function App() {
                     )}
                   </>
                 )}
-                {currentTab === "music" && <Music s={state} act={act} />}
+                {currentTab === "music" && (state.spotify?.connected ? <SpotifyMusic s={state} act={act} refresh={refresh} /> : <Music s={state} act={act} />)}
                 {currentTab === "dj" && (
                   <>
                     <p className="eyebrow">AUX COMMANDES DE LA MUSIQUE</p>
                     <h1>La régie.</h1>
+                    <SpotifyHost s={state} refresh={refresh} />
+                    {!state.spotify?.connected && <>
                     <p className="muted">
                       Agissez d’abord dans votre application musicale, puis confirmez ici. L’ordre
                       affiché est l’ordre d’arrivée des demandes.
@@ -1418,6 +1446,7 @@ export default function App() {
                         Tout est à jour. Laissez tourner la playlist.
                       </Empty>
                     )}
+                    </>}
                     <h2 className="subheading">Activité de la soirée</h2>
                     {state.events.map((e) => (
                       <div className="list-row" key={e.id}>

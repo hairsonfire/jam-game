@@ -263,3 +263,49 @@ test("une réponse perdue peut être revérifiée sans attribuer un deuxième d�
   await page.context().setOffline(false);
   await expect(page.getByRole("button", { name: "Abandonner" })).toBeEnabled();
 });
+
+test('Spotify : recherche, ajout automatique, suivi et commandes de régie', async ({ page }) => {
+  const track = { id: '1234567890123456789012', uri: 'spotify:track:1234567890123456789012', name: 'Chanson de test', artists: 'Artiste de test', durationMs: 180000, image: null, url: 'https://open.spotify.com/track/1234567890123456789012' };
+  const calls: string[] = [];
+  let added = false;
+  await page.route('**/rest/v1/rpc/game_state', async route => {
+    const response = await route.fetch();
+    const s = await response.json();
+    s.me.adds = 2; s.me.skip = true;
+    s.spotify = {connected: true, checkedAt: new Date().toISOString(), issue: null, jobs: [], snapshot: { current: {...track, id: 'other', uri: 'spotify:track:other'}, queue: added ? [track] : [], playing: true, progressMs: 60000, device: 'Enceinte du salon' }};
+    if (added) s.requests.push({id:'test-song', room_id:s.room.id, player_id:s.me.id, kind:'song', text: track.name, status:'queued', spotify_track:track, played_at:null});
+    await route.fulfill({json:s});
+  });
+  await page.route('**/functions/v1/spotify', async route => {
+    const data = route.request().postDataJSON(); calls.push(data.action);
+    await route.fulfill({json:data.action === 'search' ? {tracks:[track]} : data.action === 'devices' ? {devices:[{id:'speaker', name:'Enceinte du salon', active:true}]} : {ok:true}});
+  });
+  await page.route('**/rest/v1/rpc/game_command', async route => {
+    const data = route.request().postDataJSON();
+    if (data.kind?.startsWith('spotify_')) {
+      calls.push(data.kind); if (data.kind === 'spotify_song') added = true;
+      await route.fulfill({json:{requestId:'test-song'}});
+    } else await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', {name:'Créer', exact:true}).click();
+  await page.getByLabel('Votre pseudo').fill('DJ');
+  await page.getByLabel('Nom de la soirée').fill('Spotify test');
+  await page.getByRole('button', {name:'Créer ma soirée'}).click();
+  await expect(page.getByRole('heading', {name:'À vous, DJ.'})).toBeVisible();
+  await page.getByRole('button', {name:'Musique', exact:true}).click();
+  await page.getByLabel('Chercher une chanson ou un artiste').fill('Chanson');
+  await page.getByRole('button', {name:'Rechercher dans Spotify'}).click();
+  await page.getByRole('button', {name:'Ajouter · 1 jeton'}).click();
+  await expect(page.getByText('1e dans la file · environ 2 min')).toBeVisible();
+  expect(calls.filter(c => c === 'spotify_song')).toHaveLength(1);
+  await page.getByRole('button', {name:'Passer maintenant · 1 skip'}).click();
+  await expect.poll(() => calls.includes('spotify_skip')).toBe(true);
+  await page.screenshot({path:'test-results/09-spotify-mobile.png', fullPage:true});
+  await page.getByRole('button', {name:'Régie', exact:true}).click();
+  await page.getByRole('button', {name:'Pause', exact:true}).click();
+  await expect.poll(() => calls.includes('pause')).toBe(true);
+  await page.getByRole('button', {name:'Choisir l’appareil'}).click();
+  await page.getByRole('button', {name:'Enceinte du salon · actif'}).click();
+  await expect.poll(() => calls.includes('transfer')).toBe(true);
+});

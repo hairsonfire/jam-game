@@ -6,3 +6,7 @@ enable_anonymous_sign_ins = true
 
 [functions.push-dispatch]
 verify_jwt = false
+
+[functions.spotify]
+# The handler validates the Supabase JWT through auth.getUser on every call.
+verify_jwt = false

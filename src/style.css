@@ -505,6 +505,12 @@ button.danger:not(.text-button) {
 .install-guide { border-top: 1px solid var(--border); margin: 28px 0; padding-top: 28px; }
 .install-guide [aria-pressed="true"] { border-color: var(--lime); color: var(--lime); }
 .share-symbol { width: 22px; height: 22px; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.spotify-track { display: flex; gap: 14px; align-items: center; overflow-wrap: anywhere; }
+.spotify-track img { object-fit: contain; flex: 0 0 56px; }
+.spotify-track strong, .spotify-track small, .spotify-track a { display: block; }
+.spotify-track a { font-size: .75rem; color: var(--lime); margin-top: 5px; }
+.spotify-result { border-top: 1px solid var(--border); padding: 18px 0; }
+.spotify-result button { margin-top: 12px; }
 .navigation b {
   background: var(--orange);
   color: #16221a;

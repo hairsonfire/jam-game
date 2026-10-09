@@ -20,6 +20,8 @@ export function actionFeedback(kind: string, data: Record<string, unknown> = {})
     sacrifice: "Le sacrifice remplace votre défi. Choisissez votre témoin.",
     abandon: "Épreuve abandonnée. Vous pourrez tirer un nouveau défi dans dix minutes.",
     song: "Chanson demandée ! La personne qui contrôle la musique a reçu votre demande. Un jeton a été utilisé.",
+    spotify_song: "Demande enregistrée. Retrouvez son ajout et son passage dans « Mes chansons ».",
+    spotify_skip: "Skip demandé. Son exécution est automatique ; le jeton sera rendu si Spotify le refuse.",
     queue: "Chanson ajoutée à la file ! La demande est terminée, le joueur peut en proposer une autre.",
     skip: "Demande de skip envoyée. Votre jeton est réservé en attendant la réponse.",
     skip_done: "Skip confirmé. Le jeton réservé a été utilisé.",

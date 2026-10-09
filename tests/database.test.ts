@@ -9,6 +9,12 @@ const alice = randomUUID(),
   carol = randomUUID(),
   outsider = randomUUID();
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+async function spotify(op: string, args: Record<string, unknown> = {}, userId = alice) {
+  await db.exec('set role service_role');
+  try {
+    return (await db.query<any>('select public.spotify_service($1,$2::jsonb) result', [op, JSON.stringify({roomId: room, userId, ...args})])).rows[0].result;
+  } finally { await db.exec('reset role'); }
+}
 let room: string, code: string, aId: string, bId: string, cId: string;
 async function as(user: string) {
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [user]);
@@ -631,5 +637,114 @@ describe("Notifications persistantes", () => {
     expect((await state()).events.some((e: any) => e.kind === "test")).toBe(
       true,
     );
+  });
+});
+
+describe('Spotify : transactions et permissions', () => {
+  const track = { id: '1234567890123456789012', uri: 'spotify:track:1234567890123456789012', name: 'Test', artists: 'Artiste', durationMs: 180000, url: 'https://open.spotify.com/track/1234567890123456789012', image: null };
+  async function connected() {
+    await spotify('connect', { accountId: 'premium-test', credentials: 'encrypted-test' });
+    await spotify('cache', { tracks: [track] });
+    await win();
+  }
+  async function send() {
+    const lock = await spotify('lease', { purpose: 'sync' });
+    const job = await spotify('claim', lock);
+    return { lease: lock.lease, jobId: job.id };
+  }
+  it('cache les secrets et interdit les commandes serveur aux téléphones', async () => {
+    await connected();
+    const s = await state(bob);
+    expect(s.spotify.connected).toBe(true);
+    expect(JSON.stringify(s)).not.toContain('encrypted-test');
+    await db.exec('set role authenticated');
+    try { await expect(db.query("select public.spotify_service('connect','{}')")).rejects.toThrow(/permission/); }
+    finally { await db.exec('reset role'); }
+    await expect(spotify('connect', {accountId: 'other', credentials: 'secret'}, bob)).rejects.toThrow(/responsable/);
+    await expect(spotify('access', {}, outsider)).rejects.toThrow(/refusé/);
+  });
+  it('débite une fois, interdit le traitement manuel et rembourse une fois', async () => {
+    await connected();
+    const id = randomUUID();
+    const result = await cmd(alice, 'spotify_song', {trackId: track.id}, id);
+    expect(await cmd(alice, 'spotify_song', {trackId: track.id}, id)).toEqual(result);
+    expect((await state()).me.adds).toBe(0);
+    await expect(cmd(alice, 'queue', {requestId: result.requestId})).rejects.toThrow(/automatiquement/);
+    await expect(cmd(alice, 'song', {text: 'Autre'})).rejects.toThrow(/Spotify/);
+    const job = await send();
+    await spotify('finish', {...job, outcome: 'failed', issue: 'Appareil absent'});
+    await spotify('finish', {...job, outcome: 'failed'});
+    await spotify('finish', {...job, outcome: 'ok'});
+    const s = await state();
+    expect(s.me.adds).toBe(1);
+    expect(s.requests[0].status).toBe('rejected');
+    expect(await query("select * from jam.ledger where operation='refund'")).toHaveLength(1);
+  });
+  it('ne rejoue pas un envoi incertain et réserve la résolution au responsable', async () => {
+    await connected();
+    await cmd(alice, 'spotify_song', {trackId: track.id});
+    const job = await send();
+    await spotify('finish', {...job, outcome: 'uncertain'});
+    expect(await spotify('claim', {lease: job.lease})).toBeNull();
+    await expect(spotify('resolve', {...job, performed: false}, bob)).rejects.toThrow(/responsable/);
+    await expect(cmd(alice, 'settings', {musicId: bId, bonus: 0, sacrifice: ''})).rejects.toThrow(/envois/);
+    await spotify('resolve', {...job, performed: true});
+    await expect(spotify('resolve', {...job, performed: false})).rejects.toThrow(/vérifier/);
+    expect((await state()).requests[0].status).toBe('queued');
+    expect((await state()).me.adds).toBe(0);
+  });
+  it('un crash expire en état incertain et deux exécuteurs ne prennent pas le même envoi', async () => {
+    await connected();
+    await cmd(alice, 'spotify_song', {trackId: track.id});
+    const job = await send();
+    expect(await spotify('lease', {purpose: 'sync'})).toEqual({busy: true});
+    await db.exec("update jam.spotify_connections set lease_until=now()-interval '1 second'");
+    const next = await spotify('lease', {purpose: 'sync'});
+    await expect(spotify('finish', {...job, outcome: 'ok'})).rejects.toThrow(/expirée/);
+    expect(await spotify('claim', {lease: next.lease})).toBeNull();
+    expect((await state()).spotify.jobs[0].status).toBe('uncertain');
+  });
+  it('garde un seul skip réservé et le consomme uniquement après succès', async () => {
+    await connected();
+    await db.exec('update jam.players set skip=true');
+    const lock = await spotify('lease', {purpose: 'sync'});
+    await spotify('snapshot', {...lock, snapshot: {current: track, playing: true, progressMs: 5000, queue: []}});
+    await spotify('release', lock);
+    await cmd(alice, 'spotify_skip');
+    await expect(cmd(bob, 'spotify_skip')).rejects.toThrow(/déjà/);
+    expect((await state()).me.skip).toBe(true);
+    const job = await send();
+    await spotify('finish', {...job, outcome: 'ok'});
+    await spotify('finish', {...job, outcome: 'failed'});
+    expect((await state()).me.skip).toBe(false);
+    expect((await state(bob)).me.skip).toBe(true);
+  });
+  it('ne marque jouée qu’une lecture observée après la demande', async () => {
+    await connected();
+    await cmd(alice, 'spotify_song', {trackId: track.id});
+    const job = await send();
+    await spotify('finish', {...job, outcome: 'ok'});
+    await spotify('snapshot', {...job, snapshot: {current: track, playing: true, progressMs: 180000, queue: []}});
+    expect((await state()).requests[0].played_at).toBeNull();
+    await db.exec("update jam.requests set resolved_at=now()-interval '2 minutes'");
+    await spotify('snapshot', {...job, snapshot: {current: track, playing: true, progressMs: 30000, queue: []}});
+    expect((await state()).requests[0].played_at).not.toBeNull();
+  });
+  it('lie le retour OAuth au responsable et refuse sa réutilisation', async () => {
+    await spotify('oauth_start', {state: 'random-state', verifier: 'encrypted-verifier'});
+    await expect(spotify('oauth_take', {state: 'random-state'}, bob)).rejects.toThrow(/expirée/);
+    expect(await spotify('oauth_take', {state: 'random-state'})).toEqual({verifier: 'encrypted-verifier'});
+    await expect(spotify('oauth_take', {state: 'random-state'})).rejects.toThrow(/expirée/);
+  });
+  it('préserve les anciennes demandes manuelles et respecte Retry-After', async () => {
+    await win();
+    await cmd(alice, 'song', {text: 'Titre manuel'});
+    await expect(spotify('connect', {accountId: 'test', credentials: 'secret'})).rejects.toThrow(/manuelles/);
+    const s = await state();
+    await cmd(alice, 'queue', {requestId: s.requests[0].id});
+    await spotify('connect', {accountId: 'test', credentials: 'secret'});
+    const lock = await spotify('lease', {purpose: 'sync'});
+    await spotify('release', {...lock, retrySeconds: 60, issue: 'Quota'});
+    expect(await spotify('lease', {purpose: 'sync'})).toEqual({busy: true});
   });
 });

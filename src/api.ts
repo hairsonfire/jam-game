@@ -95,6 +95,18 @@ export async function command(
   return data;
 }
 export class SessionUnavailable extends Error {}
+export async function spotifyCall(roomId: string, action: string, data: Record<string, unknown> = {}): Promise<any> {
+  if (!navigator.onLine) throw new Error("Vous êtes hors connexion.");
+  await identity();
+  const response = await supabase!.functions.invoke("spotify", { body: { roomId, action, ...data } });
+  if (response.error) {
+    let message = "Spotify est indisponible. Vérifiez la connexion ou la configuration depuis la régie.";
+    try { message = (await response.error.context.json()).error ?? message; } catch { /* No structured response. */ }
+    throw new Error(message);
+  }
+  if (response.data?.error) throw new Error(response.data.error);
+  return response.data;
+}
 export async function readState(roomId: string): Promise<State> {
   await identity();
   const { data, error } = await supabase!

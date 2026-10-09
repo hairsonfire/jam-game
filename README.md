@@ -103,3 +103,9 @@ Oui, Jam utilise un hébergement gratuit avec des quotas. Le service peut être 
 ---
 
 Vous souhaitez installer votre propre version ou maintenir le projet ? Consultez le [guide technique](docs/TECHNIQUE.md) et le [registre des vérifications](docs/VALIDATION.md).
+
+## Connexion Spotify facultative
+
+Le responsable peut connecter son compte Premium dans **Régie**. Vous pouvez alors rechercher une chanson dans **Musique** et l’ajouter directement avec votre jeton, sans autre validation. **Mes chansons** affiche une attente estimée et les lectures détectées. Le bouton de skip passe directement au morceau suivant. Le responsable garde les commandes de lecture, pause et choix d’appareil.
+
+Sans connexion Spotify, le fonctionnement manuel décrit ci-dessus reste disponible. Pour activer cette intégration sur le serveur, consultez [la configuration Spotify](SPOTIFY.md).

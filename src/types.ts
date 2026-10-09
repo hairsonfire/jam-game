@@ -23,6 +23,8 @@ export type Assignment = {
   started_at: string | null;
 };
 export type Request = {
+  spotify_track?: SpotifyTrack | null;
+  played_at?: string | null;
   id: string;
   player_id: string;
   kind: "song" | "skip";
@@ -39,6 +41,13 @@ export type GameEvent = {
   created_at: string;
 };
 export type State = {
+  spotify?: {
+    connected: boolean;
+    checkedAt?: string;
+    issue?: string | null;
+    snapshot?: { current: SpotifyTrack | null; queue: SpotifyTrack[]; progressMs: number; playing: boolean; device: string | null; observedAt: string };
+    jobs?: { id: string; requestId: string; status: string; issue: string | null }[];
+  };
   serverTime: string;
   room: {
     id: string;
@@ -70,3 +79,4 @@ export type CommandResult = {
   code?: string;
   error?: string;
 };
+export type SpotifyTrack = { id: string; uri: string; name: string; artists: string; image: string | null; durationMs: number; url: string };
