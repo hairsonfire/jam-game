@@ -88,6 +88,7 @@ export default function Owner() {
         {rooms.filter(r=>(r.name+' '+r.code).toLocaleLowerCase().includes(filter.toLocaleLowerCase())).map(room=><section className="panel" key={room.id}>
           <h2>{room.name}</h2><p><code>{room.code}</code> · {room.players} joueur{room.players !== 1 ? 's' : ''}</p>
           <p>Créée le {date(room.created_at)}<br/>Dernière activité : {date(room.last_activity_at)}{room.spotify && <><br/>Spotify connecté</>}</p>
+          <OwnerPlayers roomId={room.id} onChange={list} />
           {selected?.id !== room.id ? <button className="secondary" disabled={busy || !online} onClick={()=>{setSelected(room);setConfirmation('');}}>Supprimer cette soirée</button> : <div className="notice">
             <p>Cette suppression est définitive : tous les joueurs, jetons, défis et demandes de cette soirée seront effacés. Les morceaux déjà envoyés à l’application musicale y resteront.</p>
             <label className="field">Recopiez {room.code} pour confirmer<input value={confirmation} autoComplete="off" onChange={e=>setConfirmation(e.target.value)} /></label>
@@ -101,4 +102,71 @@ export default function Owner() {
       </>}
     </>}
   </main>;
+}
+
+type ManagedPlayer = {id:string;name:string;adds:number;skip:boolean;admin:boolean;music:boolean};
+function OwnerPlayers({roomId,onChange}:{roomId:string;onChange:()=>Promise<void>}) {
+  const [players,setPlayers]=useState<ManagedPlayer[] | null>(null);
+  const [busy,setBusy]=useState(false), [error,setError]=useState('');
+  const [target,setTarget]=useState<ManagedPlayer | null>(null), [mode,setMode]=useState<'delete'|'recovery'>('delete');
+  const [name,setName]=useState(''), [successor,setSuccessor]=useState('');
+  const [code,setCode]=useState<{name:string;value:string}|null>(null);
+  const pending=useRef<{action_id:string;room_key:string;player_key:string;operation:string;options:Record<string,string>;secret?:string;name:string}|null>(null);
+  const lock=useRef(false);
+  async function load() {
+    const {data,error}=await client!.rpc('owner_players',{room_key:roomId});
+    if(error) throw new Error(error.message); setPlayers(data);
+  }
+  async function run(work:()=>Promise<void>) {
+    if(lock.current) return;
+    if(!navigator.onLine) {setError('Vous êtes hors connexion.');return;}
+    lock.current=true;setBusy(true);setError('');
+    try {await work();} catch(e) {setError(e instanceof Error ? e.message : 'Action impossible.');}
+    finally {lock.current=false;setBusy(false);}
+  }
+  async function send() {
+    const action=pending.current!;
+    const {secret,name:playerName,...args}=action;
+    const {error}=await client!.rpc('owner_player_action',args).abortSignal(AbortSignal.timeout(15000));
+    if(error) {
+      // SQL errors roll back. A network failure can hide a committed action.
+      if(error.code && /^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith('08')) pending.current=null;
+      throw new Error(error.message);
+    }
+    pending.current=null;
+    setCode(secret ? {name:playerName,value:secret} : null);setTarget(null);
+    await load();await onChange();
+  }
+  return <div className="disclosure">
+    <button className="secondary" disabled={busy} onClick={()=>void run(load)}>Voir / actualiser les joueurs</button>
+    {error && <p role="alert">{error}</p>}
+    {pending.current && !busy && <button className="secondary" onClick={()=>void run(send)}>Vérifier la dernière action joueur</button>}
+    {code && <div className="notice"><p>Nouveau code de récupération de {code.name}. L’ancien code ne fonctionne plus. Copiez-le avant de quitter cette page.</p><code className="secret">{code.value}</code><button className="secondary" onClick={()=>void run(async()=>{await navigator.clipboard.writeText(code.value);})}>Copier le nouveau code</button></div>}
+    {players?.length===0 && <p>Aucun joueur.</p>}
+    {players && players.length>0 && <p className="muted">Les anciens codes ne sont pas lisibles. Vous pouvez les remplacer par un nouveau code à copier.</p>}
+    {players?.map(player=><div className="panel" key={player.id}>
+      <h3>{player.name}</h3><p>{player.admin ? 'Administrateur · ' : ''}{player.music ? 'Responsable musical · ' : ''}{player.adds} jeton(s) d’ajout{player.skip ? ' · 1 skip' : ''}</p>
+      <div className="actions"><button className="secondary" disabled={busy || Boolean(pending.current)} onClick={()=>{setTarget(player);setMode('recovery');setCode(null);}}>Nouveau code de récupération</button>
+      <button className="secondary" disabled={busy || Boolean(pending.current)} onClick={()=>{setTarget(player);setMode('delete');setName('');setSuccessor('');}}>Supprimer ce joueur</button></div>
+      {target?.id===player.id && <div className="notice">
+        {mode==='recovery' ? <p>Remplacer le code de {player.name} ? L’ancien code deviendra inutilisable. Le nouveau permet de récupérer son profil. Sa session actuelle reste ouverte.</p> : <>
+          <p>Le profil, ses jetons et ses demandes seront définitivement supprimés. Les morceaux déjà ajoutés dans l’application musicale y resteront.</p>
+          <label className="field">Recopiez le pseudo {player.name}<input value={name} onChange={e=>setName(e.target.value)} /></label>
+          {player.admin && <label className="field">Nouvel administrateur<select value={successor} onChange={e=>setSuccessor(e.target.value)}><option value="">Choisir un autre joueur</option>{players.filter(p=>p.id!==player.id).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>{players.length===1 && <small>Ce joueur est seul : supprimez plutôt la soirée entière.</small>}</label>}
+        </>}
+        <button className="primary" disabled={busy || Boolean(pending.current) || (mode==='delete' && (name!==player.name || (player.admin && !successor)))} onClick={()=>void run(async()=>{
+          let secret:string|undefined;
+          let options:Record<string,string>={name,successor};
+          if(mode==='recovery') {
+            secret=Array.from(crypto.getRandomValues(new Uint8Array(20)),b=>b.toString(16).padStart(2,'0')).join('');
+            const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(secret));
+            options={hash:Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')};
+          }
+          pending.current={action_id:crypto.randomUUID(),room_key:roomId,player_key:player.id,operation:mode,options,secret,name:player.name};
+          await send();
+        })}>{mode==='recovery' ? 'Remplacer et afficher le code' : 'Effacer ce joueur définitivement'}</button>
+        <button className="secondary" disabled={busy} onClick={()=>setTarget(null)}>Annuler</button>
+      </div>}
+    </div>)}
+  </div>;
 }

@@ -791,3 +791,42 @@ describe('Gestion privée du propriétaire', () => {
     await expect(ownerRpc(outsider,'select public.owner_rooms() result')).rejects.toThrow(/propriétaire/);
   });
 });
+
+describe('Gestion des joueurs par le propriétaire',()=>{
+  async function op(user:string,playerId:string,operation:string,options:Record<string,string>,id=randomUUID()) {
+    await as(user);await db.exec('set role authenticated');
+    try {return (await db.query<any>('select public.owner_player_action($1,$2,$3,$4,$5::jsonb) result',[id,room,playerId,operation,JSON.stringify(options)])).rows[0].result;}
+    finally {await db.exec('reset role');}
+  }
+  beforeEach(async()=>{await db.exec('truncate jam.site_owner');await db.query('insert into jam.site_owner(user_id) values($1)',[outsider]);});
+  it('interdit aux administrateurs de soirée de lire ou modifier les joueurs globalement',async()=>{
+    await expect(op(alice,bId,'delete',{name:'Bob'})).rejects.toThrow(/propriétaire/);
+    await expect(op(bob,aId,'recovery',{hash:hash('new')})).rejects.toThrow(/propriétaire/);
+    await as(alice);await db.exec('set role authenticated');
+    try {await expect(db.query('select public.owner_players($1)',[room])).rejects.toThrow(/propriétaire/);}
+    finally {await db.exec('reset role');}
+  });
+  it('renouvelle le code une seule fois, sans stocker ni exposer le secret',async()=>{
+    const id=randomUUID(), secret='replacement';
+    await op(outsider,bId,'recovery',{hash:hash(secret)},id);
+    await op(outsider,bId,'recovery',{hash:hash(secret)},id);
+    await expect(cmd(carol,'recover',{code,recoveryHash:hash('bob'),newRecoveryHash:hash('next')})).rejects.toThrow(/incorrect/);
+    const fresh=randomUUID();
+    const recovered=await cmd(fresh,'recover',{code,recoveryHash:hash(secret),newRecoveryHash:hash('next')});
+    expect(recovered.playerId).toBe(bId);
+    // Replaying the original rotation must not resurrect that now-consumed code.
+    await op(outsider,bId,'recovery',{hash:hash(secret)},id);
+    expect((await query('select recovery_hash from jam.players where id=$1',[bId]))[0].recovery_hash).toBe(hash('next'));
+    await as(outsider);const [{result}]=await query('select public.owner_players($1) result',[room]);
+    expect(result).toHaveLength(3);expect(JSON.stringify(result)).not.toContain(hash('next'));
+  });
+  it('supprime un joueur avec confirmation et permet de transférer l’administration',async()=>{
+    await expect(op(outsider,bId,'delete',{name:'Erreur'})).rejects.toThrow(/pseudo/);
+    const id=randomUUID();await op(outsider,bId,'delete',{name:'Bob'},id);await op(outsider,bId,'delete',{name:'Bob'},id);
+    expect((await state()).players).toHaveLength(2);
+    await expect(op(outsider,aId,'delete',{name:'Alice'})).rejects.toThrow(/administrateur/);
+    await op(outsider,aId,'delete',{name:'Alice',successor:cId});
+    const s=await state(carol);expect(s.room.admin_id).toBe(cId);expect(s.room.music_id).toBe(cId);expect(s.players).toHaveLength(1);
+    await expect(op(outsider,cId,'delete',{name:'Carole',successor:cId})).rejects.toThrow(/administrateur/);
+  });
+});

@@ -313,6 +313,16 @@ test('Spotify : recherche, ajout automatique, suivi et commandes de régie', asy
 test('gestion privée : connexion séparée, confirmation et suppression', async ({page}) => {
   const room = {id:'11111111-1111-4111-8111-111111111111',name:'Soirée à effacer',code:'ABC123DEF456',players:3,spotify:false,created_at:new Date().toISOString(),last_activity_at:new Date().toISOString()};
   let deleted = false;
+  let playerDeleted = false;
+  await page.route('**/rest/v1/rpc/owner_players',route=>route.fulfill({json:playerDeleted ? [] : [{id:'player-test',name:'Bob',adds:2,skip:false,admin:false,music:false}]}));
+  await page.route('**/rest/v1/rpc/owner_player_action',async route=>{
+    const data=route.request().postDataJSON();
+    if(data.operation==='recovery') {
+      expect(data.options.hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(data).not.toHaveProperty('secret');
+    } else {expect(data.options.name).toBe('Bob');playerDeleted=true;}
+    await route.fulfill({json:{ok:true}});
+  });
   await page.route('**/rest/v1/rpc/owner_rooms',route=>route.fulfill({json:deleted ? [] : [room]}));
   await page.route('**/rest/v1/rpc/owner_delete_room',async route=>{
     expect(route.request().postDataJSON()).toEqual({room_key:room.id,confirmation_code:room.code});
@@ -325,6 +335,16 @@ test('gestion privée : connexion séparée, confirmation et suppression', async
   await page.getByLabel('Mot de passe',{exact:true}).fill('test-password-owner');
   await page.getByRole('button',{name:'Se connecter',exact:true}).click();
   await expect(page.getByRole('heading',{name:room.name})).toBeVisible();
+  await page.getByRole('button',{name:'Voir / actualiser les joueurs'}).click();
+  await expect(page.getByRole('heading',{name:'Bob',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Nouveau code de récupération',exact:true}).click();
+  await page.getByRole('button',{name:'Remplacer et afficher le code'}).click();
+  await expect(page.locator('code.secret')).toHaveText(/^[a-f0-9]{40}$/);
+  await page.getByRole('button',{name:'Supprimer ce joueur',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Effacer ce joueur définitivement'})).toBeDisabled();
+  await page.getByLabel('Recopiez le pseudo Bob').fill('Bob');
+  await page.getByRole('button',{name:'Effacer ce joueur définitivement'}).click();
+  await expect(page.getByText('Aucun joueur.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Supprimer cette soirée'}).click();
   await expect(page.getByRole('button',{name:'Effacer définitivement'})).toBeDisabled();
   await page.getByLabel('Recopiez '+room.code+' pour confirmer').fill(room.code);
