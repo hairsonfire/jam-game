@@ -509,6 +509,14 @@ describe("Épreuves et récompenses", () => {
   });
 });
 describe("Demandes musicales", () => {
+  it("partage les chansons ajoutées avec les autres joueurs, sans ouvrir la soirée aux inconnus", async () => {
+    await win();
+    await cmd(alice, "song", { text: "Chanson partagée" });
+    const requestId = (await state()).requests[0].id;
+    await cmd(alice, "queue", { requestId });
+    expect((await state(bob)).requests).toEqual(expect.arrayContaining([expect.objectContaining({id:requestId, player_id:aId, status:"queued"})]));
+    await expect(state(outsider)).rejects.toThrow();
+  });
   it("dépense un jeton, préserve le texte et libère la place dès l’ajout à la file", async () => {
     await win();
     await win();

@@ -31,6 +31,23 @@ export function NowPlaying({ s }: { s: State }) {
     {s.spotify?.checkedAt && <small>Dernière vérification à {new Date(s.spotify.checkedAt).toLocaleTimeString("fr-FR")}</small>}
   </section>;
 }
+export function SharedQueue({ s }: { s: State }) {
+  const queue = s.spotify?.snapshot?.queue ?? [];
+  const requests = s.requests.filter(r => r.kind === "song" && !r.played_at && (r.status === "pending" || r.status === "queued"));
+  const used = new Set<string>();
+  const name = (r: Request) => s.players.find(p => p.id === r.player_id)?.name ?? "un ancien joueur";
+  return <section className="panel" aria-label="File de la soirée"><h2>La file de la soirée</h2>
+    <p className="muted">Les prochains morceaux, dans l’ordre transmis par Spotify. Spotify peut ne montrer qu’une partie de sa file.</p>
+    {s.spotify?.checkedAt && Date.now() - Date.parse(s.spotify.checkedAt) > 30000 && <p role="status">La file n’a pas été actualisée récemment.</p>}
+    {queue.length === 0 && <p>Aucun prochain morceau transmis par Spotify.</p>}
+    {queue.map((track, index) => {
+      const request = requests.find(r => r.status === "queued" && r.spotify_track?.uri === track.uri && !used.has(r.id));
+      if (request) used.add(request.id);
+      return <div className="spotify-result" key={`${track.uri}-${index}`}><div><p><strong>{index + 1}.</strong> {request ? `Demandée par ${name(request)}` : "Auteur inconnu · ajout hors de Jam ou non identifié"}</p><Track track={track} /></div></div>;
+    })}
+    {requests.filter(r => !used.has(r.id)).map(r => <div className="spotify-result" key={r.id}><div><p>Demandée par {name(r)}</p>{r.spotify_track ? <Track track={r.spotify_track} /> : <p>{r.text}</p>}<p>{r.status === "pending" ? "En cours d’ajout" : "Ajoutée · position pas encore confirmée"}</p></div></div>)}
+  </section>;
+}
 export function SpotifyMusic({ s, act, refresh }: Props & { act: (kind: string, data?: Record<string, unknown>) => Promise<boolean> }) {
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
@@ -83,6 +100,7 @@ export function SpotifyMusic({ s, act, refresh }: Props & { act: (kind: string, 
       {waiting && <p>Votre demande est en cours d’envoi. Elle libérera votre place dès son ajout à Spotify.</p>}
       {s.me.adds < 1 && <p>Faites valider un défi par votre témoin pour gagner un jeton.</p>}
     </section>
+    <SharedQueue s={s} />
     <section className="panel"><h2>Passer le morceau</h2><p>Ce bouton passe directement au morceau suivant et utilise votre jeton de skip.</p>
       <button className="secondary" disabled={!s.me.skip || skip || !s.spotify?.snapshot?.current} onClick={() => void act("spotify_skip")}>{skip ? "Skip en cours…" : "Passer maintenant · 1 skip"}</button>
       <button className="text-button" disabled={busy} onClick={async () => { setBusy(true); try { await spotifyCall(s.room.id, "sync"); await refresh(); } catch (e) { setError(String(e)); } finally { setBusy(false); } }}>Actualiser Spotify</button>

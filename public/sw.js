@@ -1,4 +1,4 @@
-const CACHE = "jam-shell-v15";
+const CACHE = "jam-shell-v16";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {

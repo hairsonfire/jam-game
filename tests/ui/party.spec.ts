@@ -315,6 +315,9 @@ test('Spotify : recherche, ajout automatique, suivi et commandes de régie', asy
   await page.getByLabel('Chercher une chanson ou un artiste').fill('Chanson');
   await page.getByRole('button', {name:'Ajouter · 1 jeton'}).click();
   await expect(page.getByText('1e dans la file · environ 2 min')).toBeVisible();
+  const sharedQueue = page.getByRole('region', {name:'File de la soirée'});
+  await expect(sharedQueue.getByText('Demandée par DJ', {exact:false})).toBeVisible();
+  await expect(sharedQueue.getByText('Chanson de test', {exact:true})).toBeVisible();
   expect(calls.filter(c => c === 'spotify_song')).toHaveLength(1);
   await page.getByRole('button', {name:'Passer maintenant · 1 skip'}).click();
   await expect.poll(() => calls.includes('spotify_skip')).toBe(true);
