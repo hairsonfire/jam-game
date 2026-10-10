@@ -41,7 +41,12 @@ async function api(token: string, path: string, method = "GET", body?: unknown):
     res = await fetch(`https://api.spotify.com/v1${path}`, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(8000), redirect: "error" });
   } catch { throw new SpotifyError(0, method !== "GET"); }
   if (!res.ok) throw new SpotifyError(res.status, method !== "GET" && res.status >= 500, Number(res.headers.get("Retry-After")) || 60);
-  return res.status === 204 ? null : await res.json();
+  // Player commands return an acknowledgement, not a JSON document. Some
+  // successful responses contain a plain-text request id instead of being empty.
+  // Once Spotify acknowledges the write, parsing its body must never refund it.
+  if (method !== "GET" || res.status === 204) return null;
+  try { return await res.json(); }
+  catch { throw new Error("Le suivi Spotify est momentanément illisible. Réessayez dans quelques instants."); }
 }
 async function exchange(params: Record<string, string>): Promise<Token> {
   const res = await fetch("https://accounts.spotify.com/api/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ ...params, client_id: clientId }), signal: AbortSignal.timeout(8000), redirect: "error" });
