@@ -44,7 +44,7 @@ Si le morceau est introuvable, la personne qui contrôle la musique peut refuser
 Un skip sert à demander de passer le morceau en cours. Il ne fait pas passer votre propre chanson avant les autres.
 
 - Le bonus de skip est à **0 % au départ**. L’organisateur peut augmenter cette chance dans les réglages.
-- Une réussite de défi peut donner un skip en plus du jeton d’ajout. Le sacrifice ne donne pas ce bonus.
+- Une réussite de défi ou de sacrifice liquide peut donner un skip en plus du jeton d’ajout, avec la même probabilité réglée par l’organisateur.
 - Vous pouvez conserver au maximum **un skip**, et une seule demande de skip peut être en attente pour toute la soirée.
 - Votre jeton est réservé pendant le traitement, puis utilisé si le morceau est passé. Si le skip n’est pas effectué, il vous est rendu.
 

@@ -423,13 +423,46 @@ describe("Épreuves et récompenses", () => {
       attemptId: a.attempt_id,
       success: true,
     });
-    expect((await state()).me.skip).toBe(false);
+    expect((await state()).me.skip).toBe(true);
     expect((await state()).me.adds).toBe(1);
     const [row] = await query(
       "select bonus_roll from jam.assignments where id=$1",
       [a.id],
     );
-    expect(row.bonus_roll).toBeNull();
+    expect(row.bonus_roll).not.toBeNull();
+  });
+  it.each([0, 100])("sacrifice : bonus à %i % fixé à la validation, sans double récompense", async bonus => {
+    await cmd(alice, "settings", { musicId: aId, bonus: 0, sacrifice: "Gage" });
+    async function sacrifice() {
+      const assignmentId = await assigned();
+      await cmd(alice, "sacrifice", { assignmentId });
+      await cmd(alice, "invite", { assignmentId, witnessId: bId });
+      const a = (await state()).assignments.find((a: any) => a.id === assignmentId);
+      const verdict = { assignmentId, attemptId: a.attempt_id, success: true };
+      await cmd(bob, "accept", verdict);
+      return verdict;
+    }
+    const verdict = await sacrifice();
+    await cmd(alice, "settings", { musicId: aId, bonus, sacrifice: "Gage" });
+    const action = randomUUID();
+    await cmd(bob, "verdict", verdict, action);
+    const [original] = await query("select bonus_rate,bonus_roll,bonus_won from jam.assignments where id=$1", [verdict.assignmentId]);
+    expect(original.bonus_rate).toBe(bonus);
+    expect(original.bonus_roll).not.toBeNull();
+    expect(original.bonus_won).toBe(bonus === 100);
+    await cmd(bob, "verdict", verdict, action);
+    await expect(cmd(bob, "verdict", verdict)).rejects.toThrow();
+    expect((await state()).me.adds).toBe(1);
+    expect((await state()).me.skip).toBe(bonus === 100);
+    expect((await query("select bonus_rate,bonus_roll,bonus_won from jam.assignments where id=$1", [verdict.assignmentId]))[0]).toEqual(original);
+    if (bonus === 100) {
+      await cmd(alice, "skip");
+      await cmd(bob, "verdict", await sacrifice());
+      const [last] = await query("select bonus_roll,bonus_won from jam.assignments where player_id=$1 and id<>$2", [aId, verdict.assignmentId]);
+      expect(last.bonus_roll).toBeNull();
+      expect(last.bonus_won).toBe(false);
+      expect((await state()).me.adds).toBe(2);
+    }
   });
   it("un sacrifice refusé laisse seulement l’abandon, qui impose dix minutes", async () => {
     await cmd(alice, "settings", { musicId: aId, bonus: 0, sacrifice: "Gage" });
