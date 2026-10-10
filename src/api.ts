@@ -9,6 +9,7 @@ export const supabase = configured
   ? createClient(
       import.meta.env.VITE_SUPABASE_URL,
       import.meta.env.VITE_SUPABASE_ANON_KEY,
+      {auth: {detectSessionInUrl: new URLSearchParams(location.search).get('gestion') !== '1'}},
     )
   : null;
 export const storage = {

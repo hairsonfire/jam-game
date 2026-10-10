@@ -748,3 +748,46 @@ describe('Spotify : transactions et permissions', () => {
     expect(await spotify('lease', {purpose: 'sync'})).toEqual({busy: true});
   });
 });
+
+describe('Gestion privée du propriétaire', () => {
+  async function ownerRpc(user: string, sql: string, values: unknown[] = []) {
+    await as(user); await db.exec('set role authenticated');
+    try { return (await db.query<any>(sql,values)).rows[0]?.result; }
+    finally { await db.exec('reset role'); }
+  }
+  beforeEach(async () => {await db.exec('truncate jam.site_owner');});
+  it('interdit la liste et les suppressions aux joueurs, même administrateurs de soirée', async () => {
+    for (const user of [alice,bob,outsider]) {
+      await expect(ownerRpc(user,'select public.owner_rooms() result')).rejects.toThrow(/propriétaire/);
+      await expect(ownerRpc(user,'select public.owner_delete_room($1,$2) result',[room,code])).rejects.toThrow(/propriétaire/);
+    }
+    await db.exec('set role authenticated');
+    try {await expect(db.query('insert into jam.site_owner(user_id) values($1)',[alice])).rejects.toThrow(/permission/);}
+    finally {await db.exec('reset role');}
+    expect((await state()).players).toHaveLength(3);
+  });
+  it('liste toutes les soirées sans exposer les codes personnels ni les identifiants Spotify', async () => {
+    const second = await cmd(bob,'create',{name:'Bob',roomName:'Autre soirée',recoveryHash:hash('autre')});
+    await db.query('insert into jam.site_owner(user_id) values($1)',[outsider]);
+    const list = await ownerRpc(outsider,'select public.owner_rooms() result');
+    expect(list.map((r:any)=>r.id).sort()).toEqual([room,second.roomId].sort());
+    expect(list.find((r:any)=>r.id===room).players).toBe(3);
+    expect(JSON.stringify(list)).not.toContain(hash('alice'));
+    expect(Object.keys(list[0]).sort()).toEqual(['id','name','code','created_at','last_activity_at','players','spotify'].sort());
+  });
+  it('confirme exactement, supprime avec les dépendances et résiste aux répétitions', async () => {
+    await db.query('insert into jam.site_owner(user_id) values($1)',[outsider]);
+    await spotify('connect',{accountId:'owner-delete-test',credentials:'secret'});
+    await win(); await cmd(alice,'spotify_skip').catch(()=>{});
+    await expect(ownerRpc(outsider,'select public.owner_delete_room($1,$2) result',[room,'ERREUR'])).rejects.toThrow(/code exact/);
+    expect((await state()).players).toHaveLength(3);
+    expect(await ownerRpc(outsider,'select public.owner_delete_room($1,$2) result',[room,code])).toEqual({deleted:true});
+    expect(await ownerRpc(outsider,'select public.owner_delete_room($1,$2) result',[room,code])).toEqual({deleted:true});
+    for (const table of ['rooms','players','assignments','attempts','requests','ledger','spotify_connections']) {
+      expect(await query('select * from jam.'+table)).toHaveLength(0);
+    }
+    expect(await ownerRpc(outsider,'select public.owner_rooms() result')).toEqual([]);
+    await db.exec('truncate jam.site_owner');
+    await expect(ownerRpc(outsider,'select public.owner_rooms() result')).rejects.toThrow(/propriétaire/);
+  });
+});

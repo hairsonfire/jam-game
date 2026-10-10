@@ -309,3 +309,30 @@ test('Spotify : recherche, ajout automatique, suivi et commandes de régie', asy
   await page.getByRole('button', {name:'Enceinte du salon · actif'}).click();
   await expect.poll(() => calls.includes('transfer')).toBe(true);
 });
+
+test('gestion privée : connexion séparée, confirmation et suppression', async ({page}) => {
+  const room = {id:'11111111-1111-4111-8111-111111111111',name:'Soirée à effacer',code:'ABC123DEF456',players:3,spotify:false,created_at:new Date().toISOString(),last_activity_at:new Date().toISOString()};
+  let deleted = false;
+  await page.route('**/rest/v1/rpc/owner_rooms',route=>route.fulfill({json:deleted ? [] : [room]}));
+  await page.route('**/rest/v1/rpc/owner_delete_room',async route=>{
+    expect(route.request().postDataJSON()).toEqual({room_key:room.id,confirmation_code:room.code});
+    deleted=true; await route.fulfill({json:{deleted:true}});
+  });
+  await page.goto('/?gestion=1');
+  await expect(page.getByRole('heading',{name:'Gestion des soirées.'})).toBeVisible();
+  await expect(page.getByText(room.name,{exact:true})).toHaveCount(0);
+  await page.getByLabel('Adresse e-mail').fill('owner@example.test');
+  await page.getByLabel('Mot de passe',{exact:true}).fill('test-password-owner');
+  await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+  await expect(page.getByRole('heading',{name:room.name})).toBeVisible();
+  await page.getByRole('button',{name:'Supprimer cette soirée'}).click();
+  await expect(page.getByRole('button',{name:'Effacer définitivement'})).toBeDisabled();
+  await page.getByLabel('Recopiez '+room.code+' pour confirmer').fill(room.code);
+  await page.screenshot({path:'test-results/10-owner-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Effacer définitivement'}).click();
+  await expect(page.getByText('La soirée a été définitivement supprimée.')).toBeVisible();
+  await expect(page.getByText('Aucune soirée enregistrée.')).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.getItem('jam-owner-auth'))).toBeNull();
+  await page.getByRole('button',{name:'Se déconnecter'}).click();
+  await expect(page.getByRole('button',{name:'Se connecter',exact:true})).toBeVisible();
+});
