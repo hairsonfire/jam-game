@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { spotifyCall } from "./api";
 import type { State, SpotifyTrack, Request } from "./types";
 type Props = { s: State; refresh: () => Promise<void> };
@@ -36,25 +36,50 @@ export function SpotifyMusic({ s, act, refresh }: Props & { act: (kind: string, 
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false), [searchError, setSearchError] = useState("");
+  const [searchVersion, setSearchVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const term = query.trim();
+    setTracks([]); setSearched(false); setSearchError("");
+    setSearching(term.length >= 2);
+    async function search(attempt = 0) {
+      try {
+        const result = await spotifyCall(s.room.id, "search", { query: term });
+        if (cancelled) return;
+        // A playback sync may briefly hold the shared Spotify connection.
+        if (result.busy && attempt < 2) {
+          timer = setTimeout(() => void search(attempt + 1), 1000);
+          return;
+        }
+        if (result.busy) throw new Error("Spotify est occupé. Réessayez dans quelques secondes.");
+        setTracks(result.tracks); setSearched(true); setSearching(false);
+      } catch (e) {
+        if (cancelled) return;
+        setSearching(false);
+        setSearchError(e instanceof Error ? e.message : "Recherche indisponible.");
+      }
+    }
+    if (term.length >= 2) timer = setTimeout(() => void search(), 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query, s.room.id, searchVersion]);
   const waiting = s.requests.some(r => r.player_id === s.me.id && r.kind === "song" && r.status === "pending");
   const skip = s.requests.some(r => r.kind === "skip" && r.status === "pending");
   return <>
     <p className="eyebrow">VOTRE TOUR DE CHOISIR</p><h1>La bande-son.</h1><NowPlaying s={s} />
     <section className="panel"><h2>Choisissez votre chanson</h2><p>{s.me.adds} jeton{s.me.adds !== 1 ? "s" : ""} d’ajout · l’envoi à Spotify est automatique.</p>
-      <form onSubmit={async e => {
-        e.preventDefault(); setBusy(true); setError("");
-        try { const result = await spotifyCall(s.room.id, "search", { query });
-          if (result.busy) throw new Error("Spotify travaille déjà. Relancez la recherche dans quelques secondes.");
-          setTracks(result.tracks); setSearched(true);
-        } catch (e) { setError(e instanceof Error ? e.message : "Recherche indisponible."); }
-        finally { setBusy(false); }
-      }}>
-        <label className="field">Chercher une chanson ou un artiste<input value={query} onChange={e => setQuery(e.target.value)} minLength={2} maxLength={100} required /></label>
-        <button className="secondary" disabled={busy}>{busy ? "Recherche…" : "Rechercher dans Spotify"}</button>
+      <form onSubmit={e => { e.preventDefault(); setSearchVersion(v => v + 1); }}>
+        <label className="field">Chercher une chanson ou un artiste<input value={query} onChange={e => setQuery(e.target.value)} maxLength={100} autoComplete="off" aria-describedby="spotify-search-status" /></label>
       </form>
+      <div id="spotify-search-status" role="status" aria-live="polite">
+        {searching ? <p>Recherche de suggestions…</p> : query.trim().length < 2 ? <p className="muted">Tapez au moins deux caractères pour voir les suggestions.</p> : searched && tracks.length === 0 ? <p>Aucun morceau trouvé. Essayez un autre titre.</p> : null}
+      </div>
+      {searchError && <p role="alert" className="notice">{searchError} <button className="text-button" onClick={() => setSearchVersion(v => v + 1)}>Réessayer la recherche</button></p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      {searched && tracks.length === 0 && <p>Aucun morceau trouvé. Essayez un autre titre.</p>}
-      {tracks.map(track => <div className="spotify-result" key={track.id}><Track track={track} /><button className="primary" disabled={busy || waiting || s.me.adds < 1} onClick={() => void act("spotify_song", { trackId: track.id })}>Ajouter · 1 jeton</button></div>)}
+      <div aria-label="Suggestions musicales" aria-busy={searching}>
+        {tracks.map(track => <div className="spotify-result" key={track.id}><Track track={track} /><button className="primary" disabled={busy || waiting || s.me.adds < 1} onClick={() => void act("spotify_song", { trackId: track.id })}>Ajouter · 1 jeton</button></div>)}
+      </div>
       {waiting && <p>Votre demande est en cours d’envoi. Elle libérera votre place dès son ajout à Spotify.</p>}
       {s.me.adds < 1 && <p>Faites valider un défi par votre témoin pour gagner un jeton.</p>}
     </section>

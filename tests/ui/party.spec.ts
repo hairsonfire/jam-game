@@ -267,6 +267,8 @@ test("une réponse perdue peut être revérifiée sans attribuer un deuxième d�
 test('Spotify : recherche, ajout automatique, suivi et commandes de régie', async ({ page }) => {
   const track = { id: '1234567890123456789012', uri: 'spotify:track:1234567890123456789012', name: 'Chanson de test', artists: 'Artiste de test', durationMs: 180000, image: null, url: 'https://open.spotify.com/track/1234567890123456789012' };
   const calls: string[] = [];
+  let releaseOldSearch: (() => void) | undefined;
+  let oldSearchFinished = false;
   let added = false;
   await page.route('**/rest/v1/rpc/game_state', async route => {
     const response = await route.fetch();
@@ -278,6 +280,12 @@ test('Spotify : recherche, ajout automatique, suivi et commandes de régie', asy
   });
   await page.route('**/functions/v1/spotify', async route => {
     const data = route.request().postDataJSON(); calls.push(data.action);
+    if (data.action === 'search' && data.query === 'Ancienne') {
+      await new Promise<void>(resolve => { releaseOldSearch = resolve; });
+      await route.fulfill({json:{tracks:[{...track, name:'Ancien résultat'}]}});
+      oldSearchFinished = true;
+      return;
+    }
     await route.fulfill({json:data.action === 'search' ? {tracks:[track]} : data.action === 'devices' ? {devices:[{id:'speaker', name:'Enceinte du salon', active:true}]} : {ok:true}});
   });
   await page.route('**/rest/v1/rpc/game_command', async route => {
@@ -294,8 +302,17 @@ test('Spotify : recherche, ajout automatique, suivi et commandes de régie', asy
   await page.getByRole('button', {name:'Créer ma soirée'}).click();
   await expect(page.getByRole('heading', {name:'À vous, DJ.'})).toBeVisible();
   await page.getByRole('button', {name:'Musique', exact:true}).click();
+  await page.getByLabel('Chercher une chanson ou un artiste').fill('Ancienne');
+  await expect.poll(() => Boolean(releaseOldSearch)).toBe(true);
   await page.getByLabel('Chercher une chanson ou un artiste').fill('Chanson');
-  await page.getByRole('button', {name:'Rechercher dans Spotify'}).click();
+  // Suggestions appear automatically, without submitting the field.
+  await expect(page.getByRole('button', {name:'Ajouter · 1 jeton'})).toBeVisible();
+  releaseOldSearch!();
+  await expect.poll(() => oldSearchFinished).toBe(true);
+  await expect(page.getByText('Ancien résultat', {exact:true})).toHaveCount(0);
+  await page.getByLabel('Chercher une chanson ou un artiste').fill('');
+  await expect(page.getByRole('button', {name:'Ajouter · 1 jeton'})).toHaveCount(0);
+  await page.getByLabel('Chercher une chanson ou un artiste').fill('Chanson');
   await page.getByRole('button', {name:'Ajouter · 1 jeton'}).click();
   await expect(page.getByText('1e dans la file · environ 2 min')).toBeVisible();
   expect(calls.filter(c => c === 'spotify_song')).toHaveLength(1);
