@@ -11,7 +11,7 @@ Cette intégration utilise le compte Premium du responsable. Les joueurs ne conn
 2. En mode développement, vérifiez que le compte du responsable est autorisé dans les utilisateurs de l’application Spotify.
 3. Appliquez `supabase/migrations/202610090007_spotify.sql` après les migrations précédentes dans le SQL Editor Supabase.
 4. Dans les secrets Edge Functions, conservez `APP_ORIGIN=https://jam-wine-mu.vercel.app` et `PUSH_CRON_SECRET` déjà configurés. Ajoutez :
-   - `SPOTIFY_CLIENT_ID=48f3dd78f87043be899444dba6f59dce` (identifiant public) ;
+   - `SPOTIFY_CLIENT_ID=64bead85eb634b2d8734397dc07f2a43` (identifiant public) ;
    - `SPOTIFY_ENCRYPTION_KEY` : 32 octets aléatoires encodés en base64, générés une fois et sauvegardés hors Git. Ne pas utiliser le Client ID comme clé. Ne pas changer cette clé pendant une soirée : les comptes connectés devraient être reconnectés.
 5. Déployez `supabase/functions/spotify/index.ts` sous le nom **spotify**, avec la vérification JWT historique désactivée. Le code vérifie les sessions avec `auth.getUser` et les appartenances/rôles en base ; seul le secret de planification existant autorise une synchronisation sans session utilisateur. Les clés privées ne sont jamais dans le navigateur.
 6. Exécutez `supabase/setup-spotify-cron.sql`. Ce script réutilise les secrets Vault du push ; il synchronise chaque minute les soirées actives, même sans téléphone ouvert. Aucun abonnement supplémentaire.

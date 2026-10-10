@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const origin = Deno.env.get("APP_ORIGIN") ?? "";
-const clientId = Deno.env.get("SPOTIFY_CLIENT_ID") ?? "48f3dd78f87043be899444dba6f59dce";
+const clientId = Deno.env.get("SPOTIFY_CLIENT_ID") ?? "64bead85eb634b2d8734397dc07f2a43";
 const redirectUri = `${origin}/?spotify=callback`;
 const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const headers = { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS", Vary: "Origin", "Content-Type": "application/json" };
